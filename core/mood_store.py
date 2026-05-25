@@ -1,6 +1,5 @@
 """Session mood state persistence (JSON with atomic writes)."""
 
-import copy
 import json
 import os
 import asyncio

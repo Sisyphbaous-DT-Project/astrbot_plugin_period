@@ -295,6 +295,11 @@ class PeriodPlugin(Star):
         self._anchored_sessions.discard(umo)
         self._inject_counters.pop(umo, None)
         self._warmup_counters.pop(umo, None)
+        # Also clean up mood state for this session
+        scope = self.config.get("mood_scope", "per_umo")
+        mood_umo = "__global__" if scope == "global" else umo
+        await self.mood_store.delete(mood_umo)
+        self._mood_locks.pop(mood_umo, None)
         return jsonify({"status": "ok", "data": {"umo": umo, "deleted": True}})
 
     async def _get_session_config(self, umo: str) -> dict | None:
@@ -379,16 +384,29 @@ class PeriodPlugin(Star):
             logger.warning("[PeriodPlugin] 后台提示词压缩失败: %s", e)
 
     def _extract_history(self, req: ProviderRequest) -> list[dict]:
-        """Extract recent user/assistant exchanges from req.contexts."""
+        """Extract recent user/assistant exchanges from req.contexts.
+
+        Handles both dict entries (OpenAI-compatible) and astrbot Message objects.
+        """
         contexts = getattr(req, "contexts", None) or []
         history: list[dict] = []
         # Fixed context length: last 6 rounds (12 messages) of user/assistant
         for entry in contexts[-12:]:
+            role = ""
+            content = ""
             if isinstance(entry, dict):
                 role = entry.get("role", "")
                 content = entry.get("content", "")
-                if role in ("user", "assistant"):
-                    history.append({"role": role, "content": str(content)})
+            elif hasattr(entry, "role") and hasattr(entry, "content"):
+                # astrbot.core.agent.message.Message or similar Pydantic model
+                role = entry.role
+                raw_content = entry.content
+                if isinstance(raw_content, str):
+                    content = raw_content
+                elif raw_content is not None:
+                    content = str(raw_content)
+            if role in ("user", "assistant") and content:
+                history.append({"role": role, "content": content})
         return history
 
     def _inject_mood_prompts(self, mood_state: MoodState, req: ProviderRequest) -> bool:
@@ -636,7 +654,6 @@ class PeriodPlugin(Star):
             yield event.plain_result("当前没有生效的情绪工具")
             return
         mood_state.active_tools.clear()
-        mood_state.consecutive_unpleasant = 0
         await self.mood_store.set(mood_umo, mood_state)
         logger.info(f"[PeriodPlugin] 用户 {umo} 手动解除情绪工具")
         yield event.plain_result("已解除所有情绪工具限制")
@@ -920,51 +937,54 @@ class PeriodPlugin(Star):
         if self.config.get("mood_system_enabled", True):
             scope = self.config.get("mood_scope", "per_umo")
             mood_umo = "__global__" if scope == "global" else umo
-            mood_state = await self.mood_store.get(mood_umo)
-            if mood_state and mood_state.active_tools:
-                for tool in list(mood_state.active_tools):
-                    name = tool["name"]
+            lock = await self._get_mood_lock(mood_umo)
+            async with lock:
+                mood_state = await self.mood_store.get(mood_umo)
+                if mood_state and mood_state.active_tools:
+                    for tool in list(mood_state.active_tools):
+                        name = tool["name"]
 
-                    if name == "cold_violence":
-                        behavior = self.config.get("cold_violence_behavior", "angry_then_silent")
-                        if behavior != "silent" and not tool.get("initiated"):
-                            msg = self.mood_executor.get_initial_message(behavior, "")
-                            if msg:
-                                try:
-                                    await event.send(MessageChain([Comp.Plain(msg)]))
-                                except Exception as e:
-                                    logger.warning(
-                                        "[PeriodPlugin] 冷暴力初始消息发送失败: %s", e,
-                                    )
-                            tool["initiated"] = True
-                            await self.mood_store.set(mood_umo, mood_state)
+                        if name == "cold_violence":
+                            behavior = self.config.get("cold_violence_behavior", "angry_then_silent")
+                            if behavior != "silent" and not tool.get("initiated"):
+                                msg = self.mood_executor.get_initial_message(behavior, "")
+                                if msg:
+                                    try:
+                                        await event.send(MessageChain([Comp.Plain(msg)]))
+                                    except Exception as e:
+                                        logger.warning(
+                                            "[PeriodPlugin] 冷暴力初始消息发送失败: %s", e,
+                                        )
+                                tool["initiated"] = True
+                                await self.mood_store.set(mood_umo, mood_state)
 
-                        resp.completion_text = ""
-                        if resp.result_chain:
-                            resp.result_chain.chain.clear()
-                        logger.info(
-                            "[PeriodPlugin][umo=%s] cold_violence 拦截生效，丢弃回复",
-                            mood_umo,
-                        )
-                        return
-
-                    if name == "read_no_reply":
-                        tool["rounds_left"] = tool.get("rounds_left", 1) - 1
-                        if tool["rounds_left"] < 0:
-                            logger.info(
-                                "[PeriodPlugin][umo=%s] 已读不回轮数耗尽，解除", mood_umo,
-                            )
-                            mood_state.remove_tool("read_no_reply")
-                            await self.mood_store.set(mood_umo, mood_state)
-                        else:
                             resp.completion_text = ""
                             if resp.result_chain:
                                 resp.result_chain.chain.clear()
                             logger.info(
-                                "[PeriodPlugin][umo=%s] read_no_reply 拦截生效，剩余%d轮",
-                                mood_umo, tool["rounds_left"],
+                                "[PeriodPlugin][umo=%s] cold_violence 拦截生效，丢弃回复",
+                                mood_umo,
                             )
-                            await self.mood_store.set(mood_umo, mood_state)
+                            return
+
+                        if name == "read_no_reply":
+                            remaining = tool.get("rounds_left", 0)
+                            if remaining <= 0:
+                                logger.info(
+                                    "[PeriodPlugin][umo=%s] 已读不回轮数耗尽，解除", mood_umo,
+                                )
+                                mood_state.remove_tool("read_no_reply")
+                                await self.mood_store.set(mood_umo, mood_state)
+                            else:
+                                tool["rounds_left"] = remaining - 1
+                                resp.completion_text = ""
+                                if resp.result_chain:
+                                    resp.result_chain.chain.clear()
+                                logger.info(
+                                    "[PeriodPlugin][umo=%s] read_no_reply 拦截生效，剩余%d轮",
+                                    mood_umo, tool["rounds_left"],
+                                )
+                                await self.mood_store.set(mood_umo, mood_state)
                             return
 
         # ---- OOC Shield ----
@@ -1022,13 +1042,18 @@ class PeriodPlugin(Star):
                 logger.info("[PeriodPlugin] 提示词压缩已启用，将在后台自动压缩...")
                 self._compression_task = asyncio.create_task(self._auto_compress_prompts())
 
-    def _get_mood_lock(self, mood_umo: str) -> asyncio.Lock:
-        """Get or create an asyncio.Lock for the given mood UMO (WR-2 fix)."""
-        lock = self._mood_locks.get(mood_umo)
-        if lock is None:
-            lock = asyncio.Lock()
-            self._mood_locks[mood_umo] = lock
-        return lock
+    async def _get_mood_lock(self, mood_umo: str) -> asyncio.Lock:
+        """Get or create an asyncio.Lock for the given mood UMO (WR-2 fix).
+
+        Uses _mood_locks_lock to prevent race conditions when multiple
+        coroutines request a lock for the same UMO simultaneously.
+        """
+        async with self._mood_locks_lock:
+            lock = self._mood_locks.get(mood_umo)
+            if lock is None:
+                lock = asyncio.Lock()
+                self._mood_locks[mood_umo] = lock
+            return lock
 
     async def terminate(self):
         """Clean up resources on plugin unload."""

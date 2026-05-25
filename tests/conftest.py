@@ -175,6 +175,10 @@ star_mod.register = register
 # --- astrbot.api.provider ---
 provider_mod = sys.modules["astrbot.api.provider"]
 
+class Provider:
+    """Mock Chat Completion provider."""
+    pass
+
 class ProviderRequest:
     def __init__(self):
         self.system_prompt = ""
@@ -188,13 +192,18 @@ class LLMResponse:
     @property
     def completion_text(self):
         if self.result_chain:
-            return self.result_chain
+            # Match real AstrBot behavior: return plain text from chain
+            getter = getattr(self.result_chain, "get_plain_text", None)
+            if getter:
+                return getter()
+            return str(self.result_chain)
         return self._text
 
     @completion_text.setter
     def completion_text(self, value):
         self._text = value
 
+provider_mod.Provider = Provider
 provider_mod.ProviderRequest = ProviderRequest
 provider_mod.LLMResponse = LLMResponse
 

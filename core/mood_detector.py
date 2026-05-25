@@ -8,6 +8,7 @@ from typing import Any
 
 from astrbot.api import logger
 from astrbot.api.star import Context
+from astrbot.api.provider import Provider
 
 from .mood import MoodState
 from .engine import PhaseInfo
@@ -135,6 +136,7 @@ class MoodDetector:
         - If mood_detector_provider_id is configured, use it as the "small model".
         - Otherwise fall back to the main model (context.get_using_provider).
         - If prefer_main=True (for consult call), force main model.
+        - Validates that the returned provider supports text_chat (Chat Completion).
         """
         if prefer_main:
             return self.context.get_using_provider(umo)
@@ -142,9 +144,17 @@ class MoodDetector:
         provider_id = self.config.get("mood_detector_provider_id", "")
         if provider_id:
             provider = self.context.get_provider_by_id(provider_id)
-            if provider:
+            if provider and isinstance(provider, Provider):
                 return provider
-            logger.warning("[MoodDetector] 配置的小模型 %s 未找到，回退到主模型", provider_id)
+            if provider:
+                logger.warning(
+                    "[MoodDetector] 配置的模型 %s 不是文本生成模型，回退到主模型",
+                    provider_id,
+                )
+            else:
+                logger.warning(
+                    "[MoodDetector] 配置的小模型 %s 未找到，回退到主模型", provider_id,
+                )
         return self.context.get_using_provider(umo)
 
     # ------------------------------------------------------------------ #
