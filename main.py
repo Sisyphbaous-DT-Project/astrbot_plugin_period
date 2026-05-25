@@ -43,11 +43,11 @@ class PeriodPlugin(Star):
         if mode == "all":
             return True, ""
         if mode == "none":
-            return False, "当前会话的周期指令已关闭。如需调整，请前往插件配置修改「指令权限控制」。"
+            return False, "当前会话的周期指令已关闭，如需调整请前往插件配置修改指令权限控制"
         if mode == "readonly":
             if cmd_name == "status":
                 return True, ""
-            return False, "当前仅允许查看状态，设置类指令已被关闭。如需调整，请前往插件配置修改「指令权限控制」。"
+            return False, "当前仅允许查看状态，设置类指令已被关闭，如需调整请前往插件配置修改指令权限控制"
         return True, ""
 
     async def _get_session_config(self, umo: str) -> dict | None:
@@ -80,11 +80,11 @@ class PeriodPlugin(Star):
         """Generate human-readable status text for a session."""
         cfg = await self._get_session_config(umo)
         if not cfg or "anchor_date" not in cfg:
-            return "当前会话未设置周期参数，且未配置全局默认值。"
+            return "当前会话未设置周期参数，且未配置全局默认值"
 
         enabled = cfg.get("enabled", True)
         if not enabled:
-            return "当前会话的生理周期模拟已暂停，使用 `/period toggle` 可恢复。"
+            return "当前会话的生理周期模拟已暂停，使用periodtoggle可恢复"
 
         info = self.engine.get_phase(
             cfg["anchor_date"],
@@ -103,16 +103,16 @@ class PeriodPlugin(Star):
         }
 
         lines = [
-            f"当前生理状态：{phase_names.get(info.phase, info.phase)}",
-            f"阶段第 {info.day} 天 / 周期第 {info.total_day} 天",
+            f"当前生理状态{phase_names.get(info.phase, info.phase)}",
+            f"阶段第{info.day}天周期第{info.total_day}天",
         ]
         if info.days_to_next > 0:
-            lines.append(f"距离下次月经还有 {info.days_to_next} 天")
+            lines.append(f"距离下次月经还有{info.days_to_next}天")
         else:
             lines.append("正处于月经期间")
 
         if cfg.get("advance_days", 0) != 0:
-            lines.append(f"[调试] 时间已快进 {cfg['advance_days']} 天")
+            lines.append(f"[调试]时间已快进{cfg['advance_days']}天")
 
         return "\n".join(lines)
 
@@ -154,15 +154,15 @@ class PeriodPlugin(Star):
         try:
             datetime.datetime.strptime(date_str, "%Y-%m-%d")
         except ValueError:
-            yield event.plain_result("日期格式错误，请使用 YYYY-MM-DD 格式，例如：2026-05-01")
+            yield event.plain_result("日期格式错误，请使用YYYYMMDD格式，例如2026-05-01")
             return
 
         # Validate parameters
         if not (21 <= cycle_len <= 35):
-            yield event.plain_result("周期长度应在 21-35 天之间。")
+            yield event.plain_result("周期长度应在21至35天之间")
             return
         if not (2 <= period_len <= 10):
-            yield event.plain_result("经期长度应在 2-10 天之间。")
+            yield event.plain_result("经期长度应在2至10天之间")
             return
 
         # Use cycle_settings defaults from config for ovulation
@@ -187,12 +187,12 @@ class PeriodPlugin(Star):
         self._warmup_counters.pop(umo, None)
 
         yield event.plain_result(
-            f"周期参数已设置：\n"
-            f"- 经期首日：{date_str}\n"
-            f"- 周期长度：{cycle_len} 天\n"
-            f"- 经期长度：{period_len} 天\n"
-            f"- 排卵日：第 {ovulation_day} 天\n\n"
-            f"使用 `/period status` 查看当前状态。"
+            f"周期参数已设置"
+            f"经期首日{date_str}"
+            f"周期长度{cycle_len}天"
+            f"经期长度{period_len}天"
+            f"排卵日第{ovulation_day}天"
+            f"使用periodstatus查看当前状态"
         )
 
     @period_group.command("toggle")
@@ -205,7 +205,7 @@ class PeriodPlugin(Star):
         umo = event.unified_msg_origin
         cfg = await self._get_session_config(umo)
         if not cfg or "anchor_date" not in cfg:
-            yield event.plain_result("请先使用 `/period set <日期>` 设置周期参数，或在插件配置中填写全局默认值。")
+            yield event.plain_result("请先使用periodset设置周期参数，或在插件配置中填写全局默认值")
             return
 
         # If using global defaults (not yet persisted), write to store first
@@ -214,7 +214,7 @@ class PeriodPlugin(Star):
 
         new_state = await self.store.toggle(umo)
         state_text = "开启" if new_state else "暂停"
-        yield event.plain_result(f"生理周期模拟已{state_text}。")
+        yield event.plain_result(f"生理周期模拟已{state_text}")
 
     @period_group.command("advance")
     async def period_advance(self, event: AstrMessageEvent, days: int = 1):
@@ -226,7 +226,7 @@ class PeriodPlugin(Star):
         umo = event.unified_msg_origin
         cfg = await self._get_session_config(umo)
         if not cfg:
-            yield event.plain_result("请先使用 `/period set <日期>` 设置周期参数，或在插件配置中填写全局默认值。")
+            yield event.plain_result("请先使用periodset设置周期参数，或在插件配置中填写全局默认值")
             return
 
         # If using global defaults (not yet persisted), write to store first
@@ -238,8 +238,8 @@ class PeriodPlugin(Star):
         await self.store.set(umo, cfg)
 
         yield event.plain_result(
-            f"时间已快进 {days} 天（累计快进 {cfg['advance_days']} 天）。\n"
-            f"使用 `/period status` 查看当前状态。"
+            f"时间已快进{days}天（累计快进{cfg['advance_days']}天）"
+            f"使用periodstatus查看当前状态"
         )
 
     @period_group.command("reset")
@@ -255,7 +255,7 @@ class PeriodPlugin(Star):
         self._anchored_sessions.discard(umo)
         self._inject_counters.pop(umo, None)
         self._warmup_counters.pop(umo, None)
-        yield event.plain_result("当前会话的周期数据已重置。")
+        yield event.plain_result("当前会话的周期数据已重置")
 
     # ------------------------------------------------------------------ #
     #  LLM Hooks
