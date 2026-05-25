@@ -156,12 +156,11 @@ class PromptCompressor:
         )
 
         try:
-            max_tokens = self.config.get("prompt_compression_max_tokens", 1000)
+            # CR-1: AstrBot provider does not support call-level max_tokens
             logger.info(f"[PromptCompressor] 正在压缩 [{label}]，原文 {len(text)} 字")
             resp = await provider.text_chat(
                 prompt=user_prompt,
                 system_prompt=COMPRESSION_SYSTEM_PROMPT,
-                max_tokens=max_tokens,
             )
             result = (resp.completion_text or "").strip()
             # Strip markdown fences if present

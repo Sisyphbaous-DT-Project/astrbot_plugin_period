@@ -1,40 +1,39 @@
-"""Mood tool definitions, parameter validation, and prompt injection."""
+"""Mood tool definitions and execution."""
 
 from __future__ import annotations
 
 from typing import Any
 
 from astrbot.api import logger
-from .mood import MoodState
 
 
 class MoodToolExecutor:
-    """Defines available mood tools, validates params, and executes them."""
+    """Defines mood tools, validates parameters, and generates prompt injections."""
 
-    TOOLS: dict[str, dict[str, Any]] = {
+    TOOLS: dict[str, dict] = {
         "cold_violence": {
-            "description": "冷暴力：截断消息，N分钟内不回复",
+            "description": "冷暴力：N分钟内不回复用户。期间每条消息都会询问主模型是否回复。",
             "params": {
                 "duration": {"type": "int", "min": 1, "max": 1440, "default": 30}
             },
             "intercept": True,
         },
         "read_no_reply": {
-            "description": "已读不回：假装看到但不回，持续N轮",
+            "description": "已读不回：假装看到但不回，持续N轮。每轮都询问主模型是否回复。",
             "params": {
                 "rounds": {"type": "int", "min": 1, "max": 10, "default": 3}
             },
             "intercept": True,
         },
         "perfunctory_reply": {
-            "description": "敷衍回复：允许回但语气冷淡、简短",
+            "description": "敷衍回复：允许回但语气冷淡、简短、没有感情。",
             "params": {
                 "level": {"type": "int", "min": 1, "max": 3, "default": 1}
             },
             "intercept": False,
         },
         "seek_comfort": {
-            "description": "求安慰：向用户撒娇/索求关怀",
+            "description": "求安慰：向用户撒娇/索求关怀。",
             "params": {
                 "type": {
                     "type": "str",
@@ -45,14 +44,14 @@ class MoodToolExecutor:
             "intercept": False,
         },
         "delayed_reply": {
-            "description": "延迟回复风格：模拟\"刚看到消息\"或\"刚才在忙\"的回复风格，并非真正延迟发送",
+            "description": "延迟回复风格：回复带有一点姗姗来迟的感觉。",
             "params": {
                 "minutes": {"type": "int", "min": 1, "max": 60, "default": 5}
             },
             "intercept": False,
         },
         "emotional_outburst": {
-            "description": "情绪爆发：突然情绪化回复",
+            "description": "情绪爆发：突然情绪化地回应用户。",
             "params": {
                 "type": {
                     "type": "str",
@@ -63,161 +62,111 @@ class MoodToolExecutor:
             "intercept": False,
         },
         "topic_shift": {
-            "description": "转移话题：忽略用户问题，聊自己感兴趣的",
+            "description": "转移话题：巧妙忽略用户的问题，把话题转移到自己感兴趣的。",
             "params": {},
             "intercept": False,
         },
     }
 
     # ------------------------------------------------------------------ #
-    #  Param validation
+    #  Parameter validation
     # ------------------------------------------------------------------ #
 
     @classmethod
-    def validate_params(cls, tool_name: str, params: dict | None) -> dict:
-        """Validate and clamp tool parameters, filling defaults."""
-        params = dict(params) if params else {}
-        spec = cls.TOOLS.get(tool_name, {})
+    def validate_params(cls, tool_name: str, params: dict[str, Any] | None) -> dict[str, Any]:
+        """Validate and clamp tool parameters."""
+        definition = cls.TOOLS.get(tool_name)
+        if not definition:
+            return {}
+
+        param_specs = definition.get("params", {})
         result: dict[str, Any] = {}
+        raw = params or {}
 
-        for key, rule in spec.get("params", {}).items():
-            val = params.get(key)
-            if val is None:
-                val = rule["default"]
+        for key, spec in param_specs.items():
+            val = raw.get(key, spec.get("default"))
+            ptype = spec.get("type", "str")
 
-            if rule["type"] == "int":
+            if ptype == "int":
                 try:
                     val = int(val)
-                except (TypeError, ValueError):
-                    val = rule["default"]
-                val = max(rule["min"], min(rule["max"], val))
-
-            elif rule["type"] == "str":
-                val = str(val) if val else rule["default"]
-                if "options" in rule and val not in rule["options"]:
-                    val = rule["default"]
+                except (ValueError, TypeError):
+                    val = spec.get("default", 0)
+                val = max(spec.get("min", val), min(spec.get("max", val), val))
+            elif ptype == "str":
+                val = str(val)
+                if "options" in spec and val not in spec["options"]:
+                    val = spec.get("default", "")
 
             result[key] = val
 
         return result
 
     # ------------------------------------------------------------------ #
-    #  Execution
+    #  Prompt injections for non-intercepting tools
     # ------------------------------------------------------------------ #
 
     @classmethod
-    def execute(cls, tool_name: str, params: dict, mood_state: MoodState) -> None:
-        """Apply a tool to the mood state (adds to active_tools)."""
-        if tool_name not in cls.TOOLS:
-            return
-
-        # Remove existing instance of same tool to avoid stacking
-        mood_state.active_tools = [
-            t for t in mood_state.active_tools if t["name"] != tool_name
-        ]
-
-        from datetime import datetime, timedelta
-
-        tool_entry: dict[str, Any] = {"name": tool_name, "params": params}
-
-        if tool_name == "cold_violence":
-            duration = params.get("duration", 30)
-            expires = datetime.now() + timedelta(minutes=duration)
-            tool_entry["expires_at"] = expires.isoformat()
-            tool_entry["initiated"] = False
-            logger.info(f"[MoodTool] 激活冷暴力工具，持续时间={duration}分钟")
-
-        elif tool_name == "read_no_reply":
-            rounds = params.get("rounds", 3)
-            tool_entry["rounds_left"] = rounds
-            logger.info(f"[MoodTool] 激活已读不回工具，轮数={rounds}")
-
-        elif tool_name in (
-            "perfunctory_reply",
-            "seek_comfort",
-            "delayed_reply",
-            "emotional_outburst",
-            "topic_shift",
-        ):
-            # These are single-use prompt injections; no expiry needed
-            logger.info(f"[MoodTool] 激活注入型工具: {tool_name}")
-
-        mood_state.active_tools.append(tool_entry)
-
-    # ------------------------------------------------------------------ #
-    #  Prompt injection
-    # ------------------------------------------------------------------ #
-
-    @classmethod
-    def get_prompt_injection(cls, tool_name: str, params: dict) -> str:
-        """Return the prompt injection string for non-intercept tools."""
-        if tool_name == "perfunctory_reply":
-            level = params.get("level", 1)
-            intensity = {1: "简短冷淡", 2: "明显敷衍", 3: "非常敷衍，爱答不理"}
-            return (
-                f"[情绪指令] 你现在没什么心情，回复要{intensity.get(level, '冷淡')}，"
-                f"不要热情，字数尽量控制在30字以内。"
-            )
-
-        if tool_name == "seek_comfort":
-            ctype = params.get("type", "emotional")
-            mapping = {
-                "emotional": "心里有点难受，用撒娇的方式向用户索取情感安慰",
-                "physical": "身体不太舒服，暗示用户关心一下你",
-                "attention": "觉得被忽略了，用委屈的方式吸引用户注意",
-            }
-            return f"[情绪指令] 你现在{mapping.get(ctype, '心情低落')}，但不要直接说出原因。"
-
-        if tool_name == "delayed_reply":
-            return (
-                '[情绪指令] 你刚刚才看到这条消息（或者刚忙完），'
-                '回复时带一点"姗姗来迟"的感觉，不要太急切。'
-            )
-
-        if tool_name == "emotional_outburst":
-            etype = params.get("type", "angry")
-            mapping = {
-                "angry": "突然很生气，语气强烈地回应用户，带一点质问的感觉",
-                "sad": "突然很委屈，语气带着哭腔或低落，让用户感到内疚",
-                "playful": '突然撒娇式地"发作"，假装生气其实想引起关注',
-            }
-            return f"[情绪指令] 你现在{mapping.get(etype, '情绪失控')}，让情绪自然流露在回复中。"
-
-        if tool_name == "topic_shift":
-            return (
-                "[情绪指令] 你对用户当前的话题完全不感兴趣，"
-                "巧妙地转移话题到自己关心或想聊的事情上，不要生硬。"
-            )
-
+    def get_prompt_injection(cls, tool_name: str, params: dict[str, Any]) -> str:
+        """Generate a prompt injection for the given tool."""
+        injections = {
+            "perfunctory_reply": cls._perfunctory_injection,
+            "seek_comfort": cls._seek_comfort_injection,
+            "delayed_reply": cls._delayed_reply_injection,
+            "emotional_outburst": cls._emotional_outburst_injection,
+            "topic_shift": cls._topic_shift_injection,
+        }
+        fn = injections.get(tool_name)
+        if fn:
+            return fn(params)
         return ""
 
+    @staticmethod
+    def _perfunctory_injection(params: dict[str, Any]) -> str:
+        level = params.get("level", 1)
+        intensity = ["稍冷淡", "比较冷淡", "非常敷衍"][min(level, 3) - 1]
+        return f"[情绪指令] 你现在心情一般，回复要{intensity}，不要热情。"
+
+    @staticmethod
+    def _seek_comfort_injection(params: dict[str, Any]) -> str:
+        ctype = params.get("type", "emotional")
+        labels = {
+            "emotional": "情感安慰",
+            "physical": "身体关怀",
+            "attention": "需要关注",
+        }
+        return f"[情绪指令] 你现在有点低落，用撒娇的方式向用户索取{labels.get(ctype, '关怀')}。"
+
+    @staticmethod
+    def _delayed_reply_injection(_params: dict[str, Any]) -> str:
+        return "[情绪指令] 你刚忙完/刚看到消息，回复时要带点\"姗姗来迟\"的感觉。"
+
+    @staticmethod
+    def _emotional_outburst_injection(params: dict[str, Any]) -> str:
+        etype = params.get("type", "angry")
+        labels = {"angry": "生气发火", "sad": "委屈哭诉", "playful": "撒娇式发作"}
+        return f"[情绪指令] 你现在情绪突然失控，{labels.get(etype, '情绪化')}地回应用户，语气要强烈。"
+
+    @staticmethod
+    def _topic_shift_injection(_params: dict[str, Any]) -> str:
+        return "[情绪指令] 你对用户的话题不感兴趣，巧妙地把话题转移到自己关心的事情上。"
+
     # ------------------------------------------------------------------ #
-    #  Intercept helpers
+    #  Cold violence initial messages
     # ------------------------------------------------------------------ #
 
     @classmethod
-    def get_initial_message(cls, behavior: str, emotion: str) -> str:
-        """Return the initial message sent before entering silent interception."""
+    def get_initial_message(cls, behavior: str, _emotion_desc: str = "") -> str | None:
+        """Generate the initial message when cold violence starts.
+
+        Args:
+            behavior: "silent" | "angry_then_silent" | "outburst_then_silent"
+            _emotion_desc: Natural language emotion description (unused, reserved)
+        """
+        if behavior == "silent":
+            return None
         if behavior == "angry_then_silent":
-            angry = {
-                "happy": "我现在不想说话。",
-                "calm": "……让我静一静。",
-                "irritable": "烦不烦啊，我现在不想理你。",
-                "depressed": "别烦我了……",
-                "angry": "滚。我现在不想看到你。",
-                "playful": "哼！不理你了！",
-            }
-            return angry.get(emotion, "我现在不想理你。")
-
+            return "我现在不想说话。"
         if behavior == "outburst_then_silent":
-            outburst = {
-                "happy": "好吧好吧，我去忙了！",
-                "calm": "我需要一个人待会儿。",
-                "irritable": "你能不能别一直发消息？！让我安静一下不行吗！",
-                "depressed": "……你为什么总是这样对我……（已读不回）",
-                "angry": "够了！我不想再看到你的名字出现在屏幕上！",
-                "playful": "啊啊啊你好烦！我要消失一会儿！",
-            }
-            return outburst.get(emotion, "我现在情绪不太好，别烦我。")
-
-        return ""
+            return "……算了，别理我。"
+        return None

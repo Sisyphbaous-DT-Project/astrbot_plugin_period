@@ -64,6 +64,8 @@ class MoodStore:
         async with self._lock:
             data = await self._load()
             raw = data.get(umo)
+            if raw is None:
+                return None
             return MoodState.from_dict(raw)
 
     async def set(self, umo: str, state: MoodState) -> None:
@@ -73,10 +75,11 @@ class MoodStore:
             is_new = umo not in all_data
             all_data[umo] = state.to_dict()
             await self._save(all_data)
+            tool_names = [t["name"] for t in state.active_tools]
             if is_new:
-                logger.info(f"[MoodStore] 新增情绪记录: {umo}, 心情={state.mood_score:.0f}")
+                logger.info("[MoodStore] 新增情绪记录: %s, 工具=%s", umo, tool_names)
             else:
-                logger.info(f"[MoodStore] 更新情绪记录: {umo}, 心情={state.mood_score:.0f}, 工具={len(state.active_tools)}个")
+                logger.info("[MoodStore] 更新情绪记录: %s, 工具=%s", umo, tool_names)
 
     async def delete(self, umo: str) -> None:
         """Delete mood state for a session."""
@@ -85,7 +88,7 @@ class MoodStore:
             if umo in all_data:
                 del all_data[umo]
                 await self._save(all_data)
-                logger.info(f"[MoodStore] 删除情绪记录: {umo}")
+                logger.info("[MoodStore] 删除情绪记录: %s", umo)
 
     async def get_all(self) -> dict[str, MoodState]:
         """Return all persisted mood states."""
@@ -93,6 +96,5 @@ class MoodStore:
             result: dict[str, MoodState] = {}
             for umo, raw in (await self._load()).items():
                 state = MoodState.from_dict(raw)
-                if state:
-                    result[umo] = state
+                result[umo] = state
             return result

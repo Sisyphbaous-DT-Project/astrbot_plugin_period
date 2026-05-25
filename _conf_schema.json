@@ -199,24 +199,11 @@
     "default": "per_umo",
     "hint": "per_umo = 每个私聊/群聊的情绪互不影响（A 用户惹生气了不影响 B 用户）；global = 所有会话共享同一个情绪状态（一个人惹生气了所有人遭殃）。"
   },
-  "mood_detection_mode": {
-    "type": "string",
-    "description": "情绪检测频率",
-    "options": ["always", "sensitive_only", "rule_first"],
-    "default": "always",
-    "hint": "always = 每次对话都检测（最智能但最耗 token）；sensitive_only = 只在月经期/黄体期检测（省钱，平时不检测）；rule_first = 先用关键词快速筛选，只有可疑消息才上 AI 检测（平衡方案，推荐）。"
-  },
-  "inject_mood_to_prompt": {
-    "type": "bool",
-    "description": "把当前情绪状态告诉主 AI",
-    "hint": "开启后每次对话都会告诉主 AI 当前心情值和主导情绪，让 AI 的语气自然反映情绪。关闭后情绪系统只在后台运行，不影响 AI 回复的语气。",
-    "default": true
-  },
   "mood_history_length": {
     "type": "int",
-    "description": "情绪检测历史保留条数",
-    "hint": "记录最近多少次情绪变化，供检测模型参考。条数越多 AI 越\"有记忆\"，但也会占用更多 token。",
-    "default": 10,
+    "description": "情绪决策历史保留条数",
+    "hint": "记录最近多少次情绪工具调用和解除，供日志查看。",
+    "default": 20,
     "min": 1,
     "max": 50
   },
@@ -227,39 +214,6 @@
     "options": ["silent", "angry_then_silent", "outburst_then_silent"],
     "default": "angry_then_silent",
     "hint": "silent = 完全不说话直接消失；angry_then_silent = 先发一句生气的话然后消失；outburst_then_silent = 先发一句情绪爆发的话然后消失。"
-  },
-
-  "mood_base_menstrual": {
-    "type": "int",
-    "description": "月经期心情基线",
-    "hint": "月经期 AI 的基础心情值，负值表示容易烦躁低落。影响检测模型是否更容易触发负面情绪工具。",
-    "default": -3,
-    "min": -10,
-    "max": 10
-  },
-  "mood_base_follicular": {
-    "type": "int",
-    "description": "卵泡期心情基线",
-    "hint": "经期结束后 AI 的基础心情值，正值表示心情较好。",
-    "default": 1,
-    "min": -10,
-    "max": 10
-  },
-  "mood_base_ovulatory": {
-    "type": "int",
-    "description": "排卵期心情基线",
-    "hint": "排卵期间 AI 的基础心情值，正值表示心情好、社交欲强。",
-    "default": 2,
-    "min": -10,
-    "max": 10
-  },
-  "mood_base_luteal": {
-    "type": "int",
-    "description": "黄体期心情基线",
-    "hint": "经前阶段 AI 的基础心情值，负值表示容易易怒、情绪敏感。",
-    "default": -2,
-    "min": -10,
-    "max": 10
   },
 
   "enable_cold_violence": {
@@ -307,32 +261,10 @@
 
   "mood_detector_provider_id": {
     "type": "string",
-    "description": "情绪检测使用的模型",
-    "hint": "留空则使用 AstrBot 当前默认的对话模型。如需指定其他模型（如用便宜模型做情绪检测），请在下拉列表中选择。",
+    "description": "情绪检测使用的模型（小模型）",
+    "hint": "留空则使用 AstrBot 当前默认的对话模型（主模型）。如需指定其他模型（比如用更便宜的模型做筛选和理解），请在下拉列表中选择。",
     "default": "",
     "_special": "select_provider"
-  },
-  "mood_detector_prompt": {
-    "type": "text",
-    "description": "情绪检测模型的系统提示词（高级）",
-    "default": "",
-    "hint": "留空使用内置默认。这是发给\"情绪检测 AI\"的指令，不是发给主 AI 的。除非你知道自己在干嘛，否则不要改。"
-  },
-  "max_mood_detector_tokens": {
-    "type": "int",
-    "description": "情绪检测模型每次最多回复多少 token",
-    "hint": "检测模型的 JSON 回复一般很短，500 足够。如果改大了会多花钱。",
-    "default": 500,
-    "min": 100,
-    "max": 2000
-  },
-  "mood_detector_context_length": {
-    "type": "int",
-    "description": "传给情绪检测模型的最近对话轮数",
-    "hint": "检测模型能看到最近几轮对话来判断用户态度。越多越有上下文，但越耗 token。",
-    "default": 6,
-    "min": 0,
-    "max": 20
   },
   "mood_detector_read_system_prompt": {
     "type": "bool",
@@ -347,6 +279,24 @@
     "default": 800,
     "min": 100,
     "max": 3000
+  },
+  "mood_detector_screen_prompt": {
+    "type": "text",
+    "description": "筛选阶段系统提示词（高级）",
+    "default": "",
+    "hint": "留空使用内置默认。这是调用①（小模型筛选是否需要介入）的系统提示词。"
+  },
+  "mood_detector_consult_prompt": {
+    "type": "text",
+    "description": "私聊阶段用户提示词模板（高级）",
+    "default": "",
+    "hint": "留空使用内置默认。这是调用②（小模型私聊主模型）的用户提示词模板。支持 {phase} {phase_label} {day} {tools_summary} {history} {user_message} 变量。"
+  },
+  "mood_detector_interpret_prompt": {
+    "type": "text",
+    "description": "理解阶段系统提示词（高级）",
+    "default": "",
+    "hint": "留空使用内置默认。这是调用③（小模型理解主模型回复）的系统提示词。"
   },
 
   "prompt_compression_enabled": {
@@ -369,15 +319,6 @@
     "default": 30,
     "min": 10,
     "max": 80,
-    "condition": { "prompt_compression_enabled": true }
-  },
-  "prompt_compression_max_tokens": {
-    "type": "int",
-    "description": "压缩模型每次调用最多用多少 token",
-    "hint": "压缩一次提示词本身也要消耗 token，这里限制单次压缩的上限。",
-    "default": 1000,
-    "min": 200,
-    "max": 4000,
     "condition": { "prompt_compression_enabled": true }
   }
 }

@@ -1,4 +1,4 @@
-"""Tests for core/mood_store.py — MoodStore persistence."""
+"""Tests for core/mood_store.py — MoodStore persistence (v2.1)."""
 
 import pytest
 
@@ -19,12 +19,11 @@ class TestMoodStoreCrud:
 
     @pytest.mark.asyncio
     async def test_set_and_get(self, store):
-        state = MoodState(mood_score=-2, dominant_emotion="angry")
+        state = MoodState(active_tools=[{"name": "cold_violence"}])
         await store.set("test:umo", state)
         retrieved = await store.get("test:umo")
         assert retrieved is not None
-        assert retrieved.mood_score == -2.0
-        assert retrieved.dominant_emotion == "angry"
+        assert retrieved.is_tool_active("cold_violence")
 
     @pytest.mark.asyncio
     async def test_delete(self, store):
@@ -35,22 +34,22 @@ class TestMoodStoreCrud:
 
     @pytest.mark.asyncio
     async def test_get_all(self, store):
-        await store.set("a", MoodState(mood_score=1))
-        await store.set("b", MoodState(mood_score=2))
+        await store.set("a", MoodState(active_tools=[{"name": "a"}]))
+        await store.set("b", MoodState(active_tools=[{"name": "b"}]))
         all_data = await store.get_all()
         assert len(all_data) == 2
-        assert all_data["a"].mood_score == 1.0
-        assert all_data["b"].mood_score == 2.0
+        assert all_data["a"].is_tool_active("a")
+        assert all_data["b"].is_tool_active("b")
 
     @pytest.mark.asyncio
     async def test_persists_across_instances(self, temp_data_dir):
         store1 = MoodStore(temp_data_dir)
-        await store1.set("persist", MoodState(mood_score=5))
+        await store1.set("persist", MoodState(active_tools=[{"name": "test"}]))
 
         store2 = MoodStore(temp_data_dir)
         state = await store2.get("persist")
         assert state is not None
-        assert state.mood_score == 5.0
+        assert state.is_tool_active("test")
 
     @pytest.mark.asyncio
     async def test_corrupted_file_returns_empty(self, temp_data_dir):

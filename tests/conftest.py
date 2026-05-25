@@ -31,9 +31,27 @@ astrbot.api.provider = _make_module("astrbot.api.provider")
 astrbot.core = _make_module("astrbot.core")
 astrbot.core.agent = _make_module("astrbot.core.agent")
 astrbot.core.agent.message = _make_module("astrbot.core.agent.message")
+astrbot.core.message = _make_module("astrbot.core.message")
+astrbot.core.message.components = _make_module("astrbot.core.message.components")
 astrbot.core.star = _make_module("astrbot.core.star")
 astrbot.core.star.register = _make_module("astrbot.core.star.register")
 astrbot.core.star.filter = _make_module("astrbot.core.star.filter")
+
+# --- astrbot.api.message_components ---
+msg_comp_mod = _make_module("astrbot.api.message_components")
+
+class Plain:
+    def __init__(self, text=""):
+        self.text = text
+
+msg_comp_mod.Plain = Plain
+
+# --- astrbot.api.event MessageChain ---
+class MessageChain:
+    def __init__(self, chain=None):
+        self.chain = chain or []
+
+sys.modules["astrbot.api.event"].MessageChain = MessageChain
 
 # --- quart (for web api tests) ---
 quart_mod = _make_module("quart")
@@ -97,6 +115,12 @@ class _MockFilter:
 
     @staticmethod
     def permission_type(perm):
+        def decorator(func):
+            return func
+        return decorator
+
+    @staticmethod
+    def on_astrbot_loaded(**kwargs):
         def decorator(func):
             return func
         return decorator

@@ -21,7 +21,7 @@ def webui_plugin(tmp_path, sample_config, monkeypatch):
     # Keep default_anchor_date empty so not-found tests return 404
     from astrbot.api.star import Context, StarTools
     ctx = Context()
-    monkeypatch.setattr(StarTools, "get_data_dir", lambda: tmp_path)
+    monkeypatch.setattr(StarTools, "get_data_dir", lambda _name=None: tmp_path)
     plugin = PeriodPlugin(ctx, config)
     return plugin
 

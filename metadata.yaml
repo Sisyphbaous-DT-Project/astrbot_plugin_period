@@ -1,6 +1,6 @@
 name: astrbot_plugin_period
 author: C₂₂H₂₅NO₆
-version: "2.0.0"
+version: "2.1.0"
 desc: "为女性人格 Bot 提供生理周期模拟 + 情绪管理系统，低侵入式提示词设计"
 repo: "https://github.com/Sisyphbaous-DT-Project/astrbot_plugin_period"
 astrbot_version: ">=4.24"
