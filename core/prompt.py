@@ -33,17 +33,23 @@ class PromptBuilder:
         )
         return template.replace("{forbidden_words}", ", ".join(forbidden))
 
+    def _compression_enabled(self) -> bool:
+        """Return whether prompt compression is enabled in config.
+
+        The compressor cache should only be used when compression is
+        explicitly enabled. If compression is off, always read from
+        live config so that edits take effect immediately.
+        """
+        return self.config.get("prompt_compression_enabled", False)
+
     def get_anchor(self) -> str:
         """Build static anchor prompt with forbidden words substitution.
 
-        If a compressed cache exists, validate that the config has not
-        changed since compression. If it has, skip the stale cache.
+        Uses the compressed cache ONLY when prompt_compression_enabled is True.
+        Otherwise reads directly from config so that user edits apply immediately.
         """
-        if self.compressor and self.compressor.is_cached("anchor"):
-            cached_raw = self.compressor._get_original_text("anchor")
-            current_raw = self.build_raw_anchor(self.config)
-            if cached_raw == current_raw:
-                return self.compressor.get("anchor")
+        if self._compression_enabled() and self.compressor and self.compressor.is_cached("anchor"):
+            return self.compressor.get("anchor")
         return self.build_raw_anchor(self.config)
 
     def build_dynamic(self, phase: str, day: int, hour: int) -> str:
@@ -66,15 +72,14 @@ class PromptBuilder:
                 time_key = "time_afternoon"
             else:
                 time_key = "time_night"
-            # Prefer compressed time modifier if available and still fresh
+            # Use compressed cache ONLY when compression is enabled
             compressed_time_key = f"{phase}_{time_key}"
-            if self.compressor and self.compressor.is_cached(compressed_time_key):
-                cached_raw = self.compressor._get_original_text(compressed_time_key)
-                current_raw = phase_cfg.get(time_key, "")
-                if cached_raw == current_raw:
-                    time_modifier = self.compressor.get(compressed_time_key)
-                else:
-                    time_modifier = current_raw
+            if (
+                self._compression_enabled()
+                and self.compressor
+                and self.compressor.is_cached(compressed_time_key)
+            ):
+                time_modifier = self.compressor.get(compressed_time_key)
             else:
                 time_modifier = phase_cfg.get(time_key, "")
 
@@ -95,15 +100,14 @@ class PromptBuilder:
             else:
                 day_text = f"第{day}天。"
 
-        # Main prompt for this phase (prefer compressed if still fresh)
+        # Main prompt for this phase (use cache ONLY when compression enabled)
         compressed_prompt_key = f"{phase}_prompt"
-        if self.compressor and self.compressor.is_cached(compressed_prompt_key):
-            cached_raw = self.compressor._get_original_text(compressed_prompt_key)
-            current_raw = phase_cfg.get("prompt", self._default_prompt(phase))
-            if cached_raw == current_raw:
-                main_prompt = self.compressor.get(compressed_prompt_key)
-            else:
-                main_prompt = current_raw
+        if (
+            self._compression_enabled()
+            and self.compressor
+            and self.compressor.is_cached(compressed_prompt_key)
+        ):
+            main_prompt = self.compressor.get(compressed_prompt_key)
         else:
             main_prompt = phase_cfg.get("prompt", self._default_prompt(phase))
 

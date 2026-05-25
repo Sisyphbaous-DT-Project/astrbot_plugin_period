@@ -140,6 +140,7 @@ class TestPromptBuilderWithCompressor:
         config = {
             "anchor_prompt": "[身体感知系统] 原始锚点提示词。",
             "forbidden_words": ["月经"],
+            "prompt_compression_enabled": True,
         }
         compressor = PromptCompressor(ctx, config, temp_data_dir)
         await compressor.compress_all()
@@ -173,6 +174,7 @@ class TestPromptBuilderWithCompressor:
             "include_day_number": False,
             "include_phase_name": False,
             "max_prompt_length": 120,
+            "prompt_compression_enabled": True,
         }
         compressor = PromptCompressor(ctx, config, temp_data_dir)
         await compressor.compress_all()
