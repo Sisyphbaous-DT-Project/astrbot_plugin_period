@@ -196,6 +196,48 @@ async def test_webapi_advance_invalid_days_type(webui_plugin):
 
 
 @pytest.mark.asyncio
+async def test_webapi_advance_bool_rejected(webui_plugin):
+    """bool is a subclass of int and should be rejected."""
+    await webui_plugin.store.set("test:platform:user1", {
+        "anchor_date": "2025-05-20",
+        "cycle_length": 28,
+        "period_length": 5,
+        "ovulation_day": 14,
+        "ovulation_window": 3,
+        "enabled": True,
+        "advance_days": 0,
+    })
+    request.set_json({"days": True})
+    result, status = _unwrap(await webui_plugin._webapi_advance_session("test:platform:user1"))
+    assert status == 400
+    assert result["status"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_webapi_advance_out_of_range(webui_plugin):
+    """days outside [-365, 365] should be rejected."""
+    await webui_plugin.store.set("test:platform:user1", {
+        "anchor_date": "2025-05-20",
+        "cycle_length": 28,
+        "period_length": 5,
+        "ovulation_day": 14,
+        "ovulation_window": 3,
+        "enabled": True,
+        "advance_days": 0,
+    })
+    request.set_json({"days": 999})
+    result, status = _unwrap(await webui_plugin._webapi_advance_session("test:platform:user1"))
+    assert status == 400
+    assert result["status"] == "error"
+    assert "-365" in result["message"] or "365" in result["message"]
+
+    request.set_json({"days": -999})
+    result2, status2 = _unwrap(await webui_plugin._webapi_advance_session("test:platform:user1"))
+    assert status2 == 400
+    assert result2["status"] == "error"
+
+
+@pytest.mark.asyncio
 async def test_webapi_advance_not_found(webui_plugin):
     request.set_json({"days": 1})
     result, status = _unwrap(await webui_plugin._webapi_advance_session("nonexistent"))
@@ -314,6 +356,14 @@ async def test_webapi_delete_session_clears_caches(webui_plugin):
     assert umo not in webui_plugin._anchored_sessions
     assert umo not in webui_plugin._inject_counters
     assert umo not in webui_plugin._warmup_counters
+
+
+@pytest.mark.asyncio
+async def test_webapi_delete_not_found(webui_plugin):
+    result, status = _unwrap(await webui_plugin._webapi_delete_session("nonexistent"))
+    assert status == 404
+    assert result["status"] == "error"
+    assert "不存在" in result["message"]
 
 
 # --------------------------------------------------------------------------- #

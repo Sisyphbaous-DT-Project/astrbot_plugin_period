@@ -130,7 +130,8 @@ class PeriodPlugin(Star):
                 cfg.get("ovulation_window", 3),
                 cfg.get("advance_days", 0),
             )
-        except Exception:
+        except Exception as e:
+            logger.warning(f"[PeriodPlugin] Failed to serialize session {umo}: {e}")
             return None
 
         phase_labels = {
@@ -204,8 +205,10 @@ class PeriodPlugin(Star):
         """POST /astrbot_plugin_period/sessions/<umo>/advance"""
         body = await request.get_json() or {}
         days = body.get("days", 1)
-        if not isinstance(days, int):
+        if isinstance(days, bool) or not isinstance(days, int):
             return jsonify({"status": "error", "message": "days 必须是整数"}), 400
+        if not (-365 <= days <= 365):
+            return jsonify({"status": "error", "message": "days 范围为 -365 ~ 365"}), 400
 
         cfg = await self._get_session_config(umo)
         if not cfg:
@@ -257,6 +260,8 @@ class PeriodPlugin(Star):
 
     async def _webapi_delete_session(self, umo: str):
         """POST /astrbot_plugin_period/sessions/<umo>/delete"""
+        if not await self.store.get(umo):
+            return jsonify({"status": "error", "message": "会话不存在"}), 404
         await self.store.delete(umo)
         self._anchored_sessions.discard(umo)
         self._inject_counters.pop(umo, None)
