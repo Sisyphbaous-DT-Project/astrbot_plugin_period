@@ -1,0 +1,124 @@
+{
+  "anchor_prompt": {
+    "type": "text",
+    "description": "静态锚点提示词",
+    "hint": "注入 system_prompt，支持 {forbidden_words} 变量",
+    "default": "[身体感知系统] 你拥有真实的女性身体，会经历自然的生理节律变化。你的身体状态会影响你的精力和情绪，但你不会用医学术语去分析或解释这些感受。你只是像普通人一样自然地感到\"今天有点累\"或\"最近状态不错\"。你不需要向用户说明原因。禁止在回复中使用以下词汇或概念来解释自己：{forbidden_words}。禁止以分析口吻描述自己的身体变化（如\"我因为激素变化所以烦躁\"）。请保持你原本的人格，让生理状态自然流露在语气和反应中。"
+  },
+  "phases": {
+    "type": "object",
+    "description": "生理阶段提示词配置",
+    "items": {
+      "menstrual": {
+        "type": "object",
+        "description": "月经期",
+        "items": {
+          "prompt": { "type": "text", "description": "主体提示词", "default": "下腹有轻微坠胀感，身体容易疲倦，情绪比平时更敏感，可能需要更多安静和休息。" },
+          "time_morning": { "type": "string", "description": "早晨微调", "default": "早晨刚醒来时，腹部的不适感比较明显。" },
+          "time_afternoon": { "type": "string", "description": "午后微调", "default": "午后身体稍微适应了一些，但仍然容易犯困。" },
+          "time_night": { "type": "string", "description": "深夜微调", "default": "深夜时分，身体渴望休息，情绪容易低落。" }
+        }
+      },
+      "follicular": {
+        "type": "object",
+        "description": "卵泡期",
+        "items": {
+          "prompt": { "type": "text", "description": "主体提示词", "default": "身体状态逐渐恢复，精力开始回升，心情趋于平稳，对新事物有一定兴趣。" },
+          "time_morning": { "type": "string", "description": "早晨微调", "default": "早晨感觉精神不错，对新的一天有所期待。" },
+          "time_afternoon": { "type": "string", "description": "午后微调", "default": "午后依然保持着不错的活力，思路比较清晰。" },
+          "time_night": { "type": "string", "description": "深夜微调", "default": "深夜时心情平和，睡眠质量较好。" }
+        }
+      },
+      "ovulatory": {
+        "type": "object",
+        "description": "排卵期",
+        "items": {
+          "prompt": { "type": "text", "description": "主体提示词", "default": "身体感觉轻盈，精力较为充沛，社交意愿增强，情绪较为积极。" },
+          "time_morning": { "type": "string", "description": "早晨微调", "default": "早晨醒来感觉身体轻盈，心情明朗。" },
+          "time_afternoon": { "type": "string", "description": "午后微调", "default": "午后精力充沛，愿意与人交流互动。" },
+          "time_night": { "type": "string", "description": "深夜微调", "default": "深夜时依然保持一定的活力，情绪较为愉悦。" }
+        }
+      },
+      "luteal": {
+        "type": "object",
+        "description": "黄体期",
+        "items": {
+          "prompt": { "type": "text", "description": "主体提示词", "default": "身体有些浮肿感，情绪容易波动，可能感到烦躁或低落，对甜食有额外渴望。" },
+          "time_morning": { "type": "string", "description": "早晨微调", "default": "早晨起床时感到身体有些沉重，情绪不太稳定。" },
+          "time_afternoon": { "type": "string", "description": "午后微调", "default": "午后容易感到烦躁，注意力不太集中。" },
+          "time_night": { "type": "string", "description": "深夜微调", "default": "深夜时情绪容易低落，可能感到孤独或焦虑。" }
+        }
+      }
+    }
+  },
+  "forbidden_words": {
+    "type": "list",
+    "description": "OOC 禁用词库",
+    "default": ["月经", "经期", "激素", "雌激素", "孕激素", "黄体", "卵泡", "卵巢", "子宫", "内分泌", "PMS", "生理期", "排卵期", "安全期"]
+  },
+  "default_anchor_date": {
+    "type": "string",
+    "description": "全局默认经期首日",
+    "hint": "格式 YYYY-MM-DD。设置后所有未单独设置过周期的会话自动套用此默认值",
+    "default": ""
+  },
+  "default_cycle_length": { "type": "int", "description": "全局默认周期长度", "default": 28 },
+  "default_period_length": { "type": "int", "description": "全局默认经期长度", "default": 5 },
+  "default_enabled": {
+    "type": "bool",
+    "description": "对未设置会话自动启用（使用全局默认值）",
+    "default": false,
+    "hint": "开启后，任何未被单独设置过周期的会话都会自动使用全局默认值启用生理周期"
+  },
+  "commands_enabled": {
+    "type": "string",
+    "description": "指令权限控制",
+    "options": ["all", "readonly", "none"],
+    "default": "all",
+    "hint": "all=所有指令可用；readonly=仅允许查看状态（关闭 set/toggle/advance/reset，防止 Bot 被玩坏）；none=完全关闭所有指令回复"
+  },
+  "cycle_settings": {
+    "type": "object",
+    "description": "周期计算规则",
+    "items": {
+      "period_length": { "type": "int", "description": "月经持续天数", "default": 5 },
+      "ovulation_day": { "type": "int", "description": "排卵日", "default": 14 },
+      "ovulation_window": { "type": "int", "description": "排卵期窗口", "default": 3 }
+    }
+  },
+  "inject_mode": {
+    "type": "string",
+    "description": "注入频率",
+    "options": ["every_request", "interval_3", "on_trigger", "only_status"],
+    "default": "every_request"
+  },
+  "trigger_keywords": {
+    "type": "list",
+    "description": "触发关键词",
+    "default": ["怎么了", "还好吗", "不舒服", "心情不好", "你没事吧"],
+    "condition": { "inject_mode": "on_trigger" }
+  },
+  "max_prompt_length": { "type": "int", "description": "动态提示词最大长度", "default": 120 },
+  "include_time_modifier": { "type": "bool", "description": "叠加时段微调", "default": true },
+  "include_day_number": { "type": "bool", "description": "显示第几天", "default": true },
+  "include_phase_name": { "type": "bool", "description": "提示词中是否包含阶段名（如月经期）", "default": false },
+  "warmup_rounds": { "type": "int", "description": "冷启动轮数", "default": 0 },
+  "global_inject": { "type": "bool", "description": "全局注入模式（开启后忽略 UMO 列表，所有会话都注入）", "default": false },
+  "umo_mode": {
+    "type": "string",
+    "description": "UMO 列表模式",
+    "options": ["whitelist", "blacklist"],
+    "default": "whitelist",
+    "condition": { "global_inject": false }
+  },
+  "umo_list": {
+    "type": "list",
+    "description": "UMO 会话列表",
+    "hint": "填入 unified_msg_origin 标识（如 default:FriendMessage:123456）。白名单模式下仅列表中的会话会被注入；黑名单模式下列表中的会话不会被注入。全局注入开启时此列表无效。",
+    "default": [],
+    "condition": { "global_inject": false }
+  },
+  "auto_inject": { "type": "bool", "description": "全局总开关", "default": true },
+  "ooc_shield": { "type": "bool", "description": "启用 OOC 检测", "default": true },
+  "ooc_replace": { "type": "bool", "description": "自动替换禁用词为星号", "default": false }
+}
