@@ -183,13 +183,20 @@ class PromptCompressor:
     # ------------------------------------------------------------------ #
 
     def _get_provider(self):
-        """Get the active LLM provider (any umo works for provider selection)."""
-        # Provider selection does not depend on umo for most setups,
-        # but we try to get a fallback.
+        """Get the LLM provider for compression.
+
+        Uses the user-selected provider from config, or falls back to
+        AstrBot's default provider.
+        """
+        provider_id = self.config.get("mood_detector_provider_id", "")
+        if provider_id:
+            provider = self.context.get_provider_by_id(provider_id)
+            if provider:
+                return provider
+            logger.warning(f"[PromptCompressor] 配置的模型 {provider_id} 未找到，回退到默认模型")
         try:
             return self.context.get_using_provider()
         except Exception:
-            # Fallback: grab first available provider
             providers = self.context.get_all_providers()
             return providers[0] if providers else None
 

@@ -186,7 +186,14 @@ class MoodDetector:
         system_prompt: str = "",
     ) -> dict[str, Any]:
         """Run the detection model and return parsed JSON decision."""
-        provider = self.context.get_using_provider(umo)
+        provider_id = self.config.get("mood_detector_provider_id", "")
+        if provider_id:
+            provider = self.context.get_provider_by_id(provider_id)
+            if not provider:
+                logger.warning(f"[MoodDetector] 配置的检测模型 {provider_id} 未找到，回退到默认模型")
+                provider = self.context.get_using_provider(umo)
+        else:
+            provider = self.context.get_using_provider(umo)
         if not provider:
             logger.warning(f"[MoodDetector] No provider found for umo={umo}")
             return {"tool": {"name": "none"}}

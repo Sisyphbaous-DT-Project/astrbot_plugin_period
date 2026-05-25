@@ -305,6 +305,13 @@
     "default": true
   },
 
+  "mood_detector_provider_id": {
+    "type": "string",
+    "description": "情绪检测使用的模型",
+    "hint": "留空则使用 AstrBot 当前默认的对话模型。如需指定其他模型（如用便宜模型做情绪检测），请在下拉列表中选择。",
+    "default": "",
+    "_special": "select_provider"
+  },
   "mood_detector_prompt": {
     "type": "text",
     "description": "情绪检测模型的系统提示词（高级）",
