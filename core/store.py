@@ -7,6 +7,8 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
+from astrbot.api import logger
+
 
 class CycleStore:
     """Persistent storage for per-session cycle configuration."""
@@ -25,6 +27,7 @@ class CycleStore:
         
         if not self._file_path.exists():
             self._cache = {}
+            logger.info(f"[CycleStore] 数据文件不存在，创建空存储: {self._file_path}")
             return self._cache
         
         try:
@@ -32,7 +35,9 @@ class CycleStore:
             data = json.loads(content) if content.strip() else {}
             if not isinstance(data, dict):
                 data = {}
-        except (json.JSONDecodeError, OSError):
+            logger.info(f"[CycleStore] 加载数据文件成功，共 {len(data)} 条会话记录")
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning(f"[CycleStore] 数据文件读取失败: {e}，使用空存储")
             data = {}
         
         self._cache = data
@@ -64,8 +69,13 @@ class CycleStore:
         """Set session configuration."""
         async with self._lock:
             all_data = await self._load()
+            is_new = umo not in all_data
             all_data[umo] = data
             await self._save(all_data)
+            if is_new:
+                logger.info(f"[CycleStore] 新增会话记录: {umo}")
+            else:
+                logger.info(f"[CycleStore] 更新会话记录: {umo}")
 
     async def delete(self, umo: str) -> None:
         """Delete session configuration."""
@@ -74,6 +84,7 @@ class CycleStore:
             if umo in all_data:
                 del all_data[umo]
                 await self._save(all_data)
+                logger.info(f"[CycleStore] 删除会话记录: {umo}")
 
     async def get_all(self) -> dict[str, dict[str, Any]]:
         """Return a deep copy of all persisted session data."""

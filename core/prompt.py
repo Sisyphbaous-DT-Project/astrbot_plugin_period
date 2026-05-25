@@ -1,17 +1,23 @@
 """Prompt builder driven by configuration."""
 
 from datetime import datetime
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .prompt_compressor import PromptCompressor
 
 
 class PromptBuilder:
     """Builds anchor and dynamic prompts from plugin config."""
 
-    def __init__(self, config: dict) -> None:
+    def __init__(self, config: dict, compressor: "PromptCompressor | None" = None) -> None:
         self.config = config
+        self.compressor = compressor
 
-    def get_anchor(self) -> str:
-        """Build static anchor prompt with forbidden words substitution."""
-        template = self.config.get(
+    @classmethod
+    def build_raw_anchor(cls, config: dict) -> str:
+        """Build the raw (uncompressed) anchor prompt text."""
+        template = config.get(
             "anchor_prompt",
             "[身体感知系统] 你拥有真实的女性身体，会经历自然的生理节律变化。"
             "你的身体状态会影响你的精力和情绪，但你不会用医学术语去分析或解释这些感受。"
@@ -21,11 +27,17 @@ class PromptBuilder:
             "禁止以分析口吻描述自己的身体变化（如\"我因为激素变化所以烦躁\"）。"
             "请保持你原本的人格，让生理状态自然流露在语气和反应中。",
         )
-        forbidden = self.config.get(
+        forbidden = config.get(
             "forbidden_words",
             ["月经", "经期", "激素", "雌激素", "孕激素", "黄体", "卵泡", "卵巢", "子宫", "内分泌", "PMS", "生理期", "排卵期", "安全期"],
         )
         return template.replace("{forbidden_words}", ", ".join(forbidden))
+
+    def get_anchor(self) -> str:
+        """Build static anchor prompt with forbidden words substitution."""
+        if self.compressor and self.compressor.is_cached("anchor"):
+            return self.compressor.get("anchor")
+        return self.build_raw_anchor(self.config)
 
     def build_dynamic(self, phase: str, day: int, hour: int) -> str:
         """Build dynamic state prompt for the current cycle phase.
@@ -47,7 +59,12 @@ class PromptBuilder:
                 time_key = "time_afternoon"
             else:
                 time_key = "time_night"
-            time_modifier = phase_cfg.get(time_key, "")
+            # Prefer compressed time modifier if available
+            compressed_time_key = f"{phase}_{time_key}"
+            if self.compressor and self.compressor.is_cached(compressed_time_key):
+                time_modifier = self.compressor.get(compressed_time_key)
+            else:
+                time_modifier = phase_cfg.get(time_key, "")
 
         # Build phase name and day number text
         day_text = ""
@@ -66,8 +83,12 @@ class PromptBuilder:
             else:
                 day_text = f"第{day}天。"
 
-        # Main prompt for this phase
-        main_prompt = phase_cfg.get("prompt", self._default_prompt(phase))
+        # Main prompt for this phase (prefer compressed)
+        compressed_prompt_key = f"{phase}_prompt"
+        if self.compressor and self.compressor.is_cached(compressed_prompt_key):
+            main_prompt = self.compressor.get(compressed_prompt_key)
+        else:
+            main_prompt = phase_cfg.get("prompt", self._default_prompt(phase))
 
         # Combine
         parts = [p for p in [main_prompt, day_text, time_modifier] if p]

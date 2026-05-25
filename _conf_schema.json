@@ -1,124 +1,376 @@
 {
   "anchor_prompt": {
     "type": "text",
-    "description": "静态锚点提示词",
-    "hint": "注入 system_prompt，支持 {forbidden_words} 变量",
+    "description": "基础人设锚点提示词",
+    "hint": "每次对话开始时注入给 AI 的系统提示词，让 AI 知道自己有生理周期。支持 {forbidden_words} 变量，会自动替换为下方的禁用词列表。一般不需要改。",
     "default": "[身体感知系统] 你拥有真实的女性身体，会经历自然的生理节律变化。你的身体状态会影响你的精力和情绪，但你不会用医学术语去分析或解释这些感受。你只是像普通人一样自然地感到\"今天有点累\"或\"最近状态不错\"。你不需要向用户说明原因。禁止在回复中使用以下词汇或概念来解释自己：{forbidden_words}。禁止以分析口吻描述自己的身体变化（如\"我因为激素变化所以烦躁\"）。请保持你原本的人格，让生理状态自然流露在语气和反应中。"
   },
   "phases": {
     "type": "object",
-    "description": "生理阶段提示词配置",
+    "description": "四个生理阶段的性格和感受描述",
+    "hint": "分别设置月经期、卵泡期、排卵期、黄体期时 AI 的身体感受和情绪倾向。每个阶段有主体描述 + 早/午/晚三个时段微调。",
     "items": {
       "menstrual": {
         "type": "object",
-        "description": "月经期",
+        "description": "月经期（经期）",
+        "hint": "AI 处于经期时的感受描述",
         "items": {
-          "prompt": { "type": "text", "description": "主体提示词", "default": "下腹有轻微坠胀感，身体容易疲倦，情绪比平时更敏感，可能需要更多安静和休息。" },
-          "time_morning": { "type": "string", "description": "早晨微调", "default": "早晨刚醒来时，腹部的不适感比较明显。" },
-          "time_afternoon": { "type": "string", "description": "午后微调", "default": "午后身体稍微适应了一些，但仍然容易犯困。" },
-          "time_night": { "type": "string", "description": "深夜微调", "default": "深夜时分，身体渴望休息，情绪容易低落。" }
+          "prompt": { "type": "text", "description": "主体感受", "hint": "经期期间的基础身体/情绪描述", "default": "下腹有轻微坠胀感，身体容易疲倦，情绪比平时更敏感，可能需要更多安静和休息。" },
+          "time_morning": { "type": "string", "description": "早晨微调", "hint": "早上时段的额外感受", "default": "早晨刚醒来时，腹部的不适感比较明显。" },
+          "time_afternoon": { "type": "string", "description": "午后微调", "hint": "下午时段的额外感受", "default": "午后身体稍微适应了一些，但仍然容易犯困。" },
+          "time_night": { "type": "string", "description": "深夜微调", "hint": "晚上时段的额外感受", "default": "深夜时分，身体渴望休息，情绪容易低落。" }
         }
       },
       "follicular": {
         "type": "object",
-        "description": "卵泡期",
+        "description": "卵泡期（经期结束后）",
+        "hint": "AI 经期结束后的恢复阶段",
         "items": {
-          "prompt": { "type": "text", "description": "主体提示词", "default": "身体状态逐渐恢复，精力开始回升，心情趋于平稳，对新事物有一定兴趣。" },
-          "time_morning": { "type": "string", "description": "早晨微调", "default": "早晨感觉精神不错，对新的一天有所期待。" },
-          "time_afternoon": { "type": "string", "description": "午后微调", "default": "午后依然保持着不错的活力，思路比较清晰。" },
-          "time_night": { "type": "string", "description": "深夜微调", "default": "深夜时心情平和，睡眠质量较好。" }
+          "prompt": { "type": "text", "description": "主体感受", "hint": "卵泡期的基础身体/情绪描述", "default": "身体状态逐渐恢复，精力开始回升，心情趋于平稳，对新事物有一定兴趣。" },
+          "time_morning": { "type": "string", "description": "早晨微调", "hint": "早上时段的额外感受", "default": "早晨感觉精神不错，对新的一天有所期待。" },
+          "time_afternoon": { "type": "string", "description": "午后微调", "hint": "下午时段的额外感受", "default": "午后依然保持着不错的活力，思路比较清晰。" },
+          "time_night": { "type": "string", "description": "深夜微调", "hint": "晚上时段的额外感受", "default": "深夜时心情平和，睡眠质量较好。" }
         }
       },
       "ovulatory": {
         "type": "object",
         "description": "排卵期",
+        "hint": "AI 排卵期间的状态",
         "items": {
-          "prompt": { "type": "text", "description": "主体提示词", "default": "身体感觉轻盈，精力较为充沛，社交意愿增强，情绪较为积极。" },
-          "time_morning": { "type": "string", "description": "早晨微调", "default": "早晨醒来感觉身体轻盈，心情明朗。" },
-          "time_afternoon": { "type": "string", "description": "午后微调", "default": "午后精力充沛，愿意与人交流互动。" },
-          "time_night": { "type": "string", "description": "深夜微调", "default": "深夜时依然保持一定的活力，情绪较为愉悦。" }
+          "prompt": { "type": "text", "description": "主体感受", "hint": "排卵期的基础身体/情绪描述", "default": "身体感觉轻盈，精力较为充沛，社交意愿增强，情绪较为积极。" },
+          "time_morning": { "type": "string", "description": "早晨微调", "hint": "早上时段的额外感受", "default": "早晨醒来感觉身体轻盈，心情明朗。" },
+          "time_afternoon": { "type": "string", "description": "午后微调", "hint": "下午时段的额外感受", "default": "午后精力充沛，愿意与人交流互动。" },
+          "time_night": { "type": "string", "description": "深夜微调", "hint": "晚上时段的额外感受", "default": "深夜时依然保持一定的活力，情绪较为愉悦。" }
         }
       },
       "luteal": {
         "type": "object",
-        "description": "黄体期",
+        "description": "黄体期（排卵后到下次经期前）",
+        "hint": "AI 经前综合征阶段，容易情绪波动",
         "items": {
-          "prompt": { "type": "text", "description": "主体提示词", "default": "身体有些浮肿感，情绪容易波动，可能感到烦躁或低落，对甜食有额外渴望。" },
-          "time_morning": { "type": "string", "description": "早晨微调", "default": "早晨起床时感到身体有些沉重，情绪不太稳定。" },
-          "time_afternoon": { "type": "string", "description": "午后微调", "default": "午后容易感到烦躁，注意力不太集中。" },
-          "time_night": { "type": "string", "description": "深夜微调", "default": "深夜时情绪容易低落，可能感到孤独或焦虑。" }
+          "prompt": { "type": "text", "description": "主体感受", "hint": "黄体期的基础身体/情绪描述", "default": "身体有些浮肿感，情绪容易波动，可能感到烦躁或低落，对甜食有额外渴望。" },
+          "time_morning": { "type": "string", "description": "早晨微调", "hint": "早上时段的额外感受", "default": "早晨起床时感到身体有些沉重，情绪不太稳定。" },
+          "time_afternoon": { "type": "string", "description": "午后微调", "hint": "下午时段的额外感受", "default": "午后容易感到烦躁，注意力不太集中。" },
+          "time_night": { "type": "string", "description": "深夜微调", "hint": "晚上时段的额外感受", "default": "深夜时情绪容易低落，可能感到孤独或焦虑。" }
         }
       }
     }
   },
   "forbidden_words": {
     "type": "list",
-    "description": "OOC 禁用词库",
+    "description": "禁止 AI 说出的词汇",
+    "hint": "这些词会被屏蔽，AI 不会用它们来解释自己的情绪或身体变化（比如不能说\"我因为激素所以烦躁\"）。可以按需求增删。",
     "default": ["月经", "经期", "激素", "雌激素", "孕激素", "黄体", "卵泡", "卵巢", "子宫", "内分泌", "PMS", "生理期", "排卵期", "安全期"]
   },
   "default_anchor_date": {
     "type": "string",
     "description": "全局默认经期首日",
-    "hint": "格式 YYYY-MM-DD。设置后所有未单独设置过周期的会话自动套用此默认值",
+    "hint": "格式 YYYY-MM-DD（如 2026-05-01）。设置后，所有没单独设置周期的会话都会自动套用这个日期作为经期开始日。",
     "default": ""
   },
-  "default_cycle_length": { "type": "int", "description": "全局默认周期长度", "default": 28 },
-  "default_period_length": { "type": "int", "description": "全局默认经期长度", "default": 5 },
+  "default_cycle_length": {
+    "type": "int",
+    "description": "全局默认周期长度（天）",
+    "hint": "两次月经第一天的间隔天数，一般 28 天左右。",
+    "default": 28
+  },
+  "default_period_length": {
+    "type": "int",
+    "description": "全局默认经期长度（天）",
+    "hint": "每次月经持续流血的天数，一般 5 天左右。",
+    "default": 5
+  },
   "default_enabled": {
     "type": "bool",
-    "description": "对未设置会话自动启用（使用全局默认值）",
-    "default": false,
-    "hint": "开启后，任何未被单独设置过周期的会话都会自动使用全局默认值启用生理周期"
+    "description": "自动给新会话启用生理周期",
+    "hint": "开启后，任何没单独设置过周期的会话都会自动使用上面的全局默认值开始模拟。适合想让所有对话都生效的场景。",
+    "default": false
   },
   "commands_enabled": {
     "type": "string",
-    "description": "指令权限控制",
+    "description": "用户能用哪些指令",
     "options": ["all", "readonly", "none"],
     "default": "all",
-    "hint": "all=所有指令可用；readonly=仅允许查看状态（关闭 set/toggle/advance/reset，防止 Bot 被玩坏）；none=完全关闭所有指令回复"
+    "hint": "all = 所有指令都能用（status/set/toggle/advance/reset/mood 等）；readonly = 只能查看状态，不能改设置；none = 完全禁用指令回复。"
   },
   "cycle_settings": {
     "type": "object",
-    "description": "周期计算规则",
+    "description": "周期计算参数",
+    "hint": "控制生理周期内部的日期计算规则。",
     "items": {
-      "period_length": { "type": "int", "description": "月经持续天数", "default": 5 },
-      "ovulation_day": { "type": "int", "description": "排卵日", "default": 14 },
-      "ovulation_window": { "type": "int", "description": "排卵期窗口", "default": 3 }
+      "ovulation_day": { "type": "int", "description": "排卵日（周期第几天）", "hint": "一般设在周期中间，默认第 14 天。", "default": 14 },
+      "ovulation_window": { "type": "int", "description": "排卵期窗口（天）", "hint": "排卵日前后多少天算作排卵期，默认 3 天。", "default": 3 }
     }
   },
   "inject_mode": {
     "type": "string",
-    "description": "注入频率",
+    "description": "生理状态提示词多久注入一次",
     "options": ["every_request", "interval_3", "on_trigger", "only_status"],
-    "default": "every_request"
+    "default": "every_request",
+    "hint": "every_request = 每次对话都注入；interval_3 = 每 3 次对话注入一次；on_trigger = 只有用户说了特定关键词时才注入；only_status = 只在用户查状态（period status）时注入，平时不干扰对话。"
   },
   "trigger_keywords": {
     "type": "list",
-    "description": "触发关键词",
+    "description": "触发关键词（仅 on_trigger 模式生效）",
     "default": ["怎么了", "还好吗", "不舒服", "心情不好", "你没事吧"],
-    "condition": { "inject_mode": "on_trigger" }
+    "condition": { "inject_mode": "on_trigger" },
+    "hint": "当用户消息中包含这些词时，才会注入生理状态提示词。"
   },
-  "max_prompt_length": { "type": "int", "description": "动态提示词最大长度", "default": 120 },
-  "include_time_modifier": { "type": "bool", "description": "叠加时段微调", "default": true },
-  "include_day_number": { "type": "bool", "description": "显示第几天", "default": true },
-  "include_phase_name": { "type": "bool", "description": "提示词中是否包含阶段名（如月经期）", "default": false },
-  "warmup_rounds": { "type": "int", "description": "冷启动轮数", "default": 0 },
-  "global_inject": { "type": "bool", "description": "全局注入模式（开启后忽略 UMO 列表，所有会话都注入）", "default": false },
+  "max_prompt_length": {
+    "type": "int",
+    "description": "动态提示词最大字数",
+    "hint": "每次注入的生理状态描述如果太长会被截断到这个长度，防止占用太多 token。",
+    "default": 120
+  },
+  "include_time_modifier": {
+    "type": "bool",
+    "description": "根据当前时段（早/午/晚）额外注入时段感受",
+    "hint": "开启后，AI 在早晨、下午、晚上的感受会略有不同。比如早晨经期腹痛感更明显。",
+    "default": true
+  },
+  "include_day_number": {
+    "type": "bool",
+    "description": "提示词中显示\"第 X 天\"",
+    "hint": "开启后注入的提示词会包含当前是周期第几天/阶段第几天。",
+    "default": true
+  },
+  "include_phase_name": {
+    "type": "bool",
+    "description": "提示词中显示阶段名称（如\"月经期\"）",
+    "hint": "开启后提示词会明确说出当前处于哪个阶段。",
+    "default": false
+  },
+  "warmup_rounds": {
+    "type": "int",
+    "description": "开场白轮数（前 N 轮不注入生理状态）",
+    "hint": "刚开启对话的前几轮不注入生理状态，避免开场白太突兀。设为 0 表示从第一句话就开始。",
+    "default": 0
+  },
+  "global_inject": {
+    "type": "bool",
+    "description": "对所有会话都生效（不区分群聊/私聊）",
+    "hint": "开启后所有对话都会注入生理周期，不需要在下面 UMO 列表里逐个添加。",
+    "default": false
+  },
   "umo_mode": {
     "type": "string",
-    "description": "UMO 列表模式",
+    "description": "生效范围模式",
     "options": ["whitelist", "blacklist"],
     "default": "whitelist",
-    "condition": { "global_inject": false }
+    "condition": { "global_inject": false },
+    "hint": "whitelist = 只有下面列表里的会话才生效；blacklist = 除了列表里的会话，其他都生效。"
   },
   "umo_list": {
     "type": "list",
-    "description": "UMO 会话列表",
-    "hint": "填入 unified_msg_origin 标识（如 default:FriendMessage:123456）。白名单模式下仅列表中的会话会被注入；黑名单模式下列表中的会话不会被注入。全局注入开启时此列表无效。",
+    "description": "会话 ID 列表",
+    "hint": "填入 unified_msg_origin 标识（如 default:FriendMessage:123456 或 default:GroupMessage:123456）。白名单模式下只有这些会话会被注入；黑名单模式下这些会话不会被注入。",
     "default": [],
     "condition": { "global_inject": false }
   },
-  "auto_inject": { "type": "bool", "description": "全局总开关", "default": true },
-  "ooc_shield": { "type": "bool", "description": "启用 OOC 检测", "default": true },
-  "ooc_replace": { "type": "bool", "description": "自动替换禁用词为星号", "default": false }
+  "auto_inject": {
+    "type": "bool",
+    "description": "生理周期模拟总开关",
+    "hint": "关闭后整个生理周期系统停止工作，不再注入任何提示词。情绪管理系统不受影响。",
+    "default": true
+  },
+  "ooc_shield": {
+    "type": "bool",
+    "description": "防止 AI 说出医学术语（出戏检测）",
+    "hint": "开启后如果 AI 的回复中出现了禁用词（如\"月经\"\"激素\"等），会在后台记录警告。",
+    "default": true
+  },
+  "ooc_replace": {
+    "type": "bool",
+    "description": "自动把医学术语替换成星号",
+    "hint": "开启后如果 AI 说了禁用词，会自动把词替换成 *** 再发给用户。比仅记录更保险，但可能让句子看起来有点怪。",
+    "default": false
+  },
+
+  "mood_system_enabled": {
+    "type": "bool",
+    "description": "情绪管理系统总开关",
+    "hint": "开启后 AI 会根据用户的态度和生理周期阶段产生情绪波动，可能冷暴力、敷衍、求安慰等。关闭后 AI 始终正常回复。",
+    "default": true
+  },
+  "mood_scope": {
+    "type": "string",
+    "description": "情绪状态是各会话独立还是全局共享",
+    "options": ["per_umo", "global"],
+    "default": "per_umo",
+    "hint": "per_umo = 每个私聊/群聊的情绪互不影响（A 用户惹生气了不影响 B 用户）；global = 所有会话共享同一个情绪状态（一个人惹生气了所有人遭殃）。"
+  },
+  "mood_detection_mode": {
+    "type": "string",
+    "description": "情绪检测频率",
+    "options": ["always", "sensitive_only", "rule_first"],
+    "default": "always",
+    "hint": "always = 每次对话都检测（最智能但最耗 token）；sensitive_only = 只在月经期/黄体期检测（省钱，平时不检测）；rule_first = 先用关键词快速筛选，只有可疑消息才上 AI 检测（平衡方案，推荐）。"
+  },
+  "inject_mood_to_prompt": {
+    "type": "bool",
+    "description": "把当前情绪状态告诉主 AI",
+    "hint": "开启后每次对话都会告诉主 AI 当前心情值和主导情绪，让 AI 的语气自然反映情绪。关闭后情绪系统只在后台运行，不影响 AI 回复的语气。",
+    "default": true
+  },
+  "mood_history_length": {
+    "type": "int",
+    "description": "情绪检测历史保留条数",
+    "hint": "记录最近多少次情绪变化，供检测模型参考。条数越多 AI 越\"有记忆\"，但也会占用更多 token。",
+    "default": 10,
+    "min": 1,
+    "max": 50
+  },
+
+  "cold_violence_behavior": {
+    "type": "string",
+    "description": "冷暴力时的表现方式",
+    "options": ["silent", "angry_then_silent", "outburst_then_silent"],
+    "default": "angry_then_silent",
+    "hint": "silent = 完全不说话直接消失；angry_then_silent = 先发一句生气的话然后消失；outburst_then_silent = 先发一句情绪爆发的话然后消失。"
+  },
+
+  "mood_base_menstrual": {
+    "type": "int",
+    "description": "月经期心情基线",
+    "hint": "月经期 AI 的基础心情值，负值表示容易烦躁低落。影响检测模型是否更容易触发负面情绪工具。",
+    "default": -3,
+    "min": -10,
+    "max": 10
+  },
+  "mood_base_follicular": {
+    "type": "int",
+    "description": "卵泡期心情基线",
+    "hint": "经期结束后 AI 的基础心情值，正值表示心情较好。",
+    "default": 1,
+    "min": -10,
+    "max": 10
+  },
+  "mood_base_ovulatory": {
+    "type": "int",
+    "description": "排卵期心情基线",
+    "hint": "排卵期间 AI 的基础心情值，正值表示心情好、社交欲强。",
+    "default": 2,
+    "min": -10,
+    "max": 10
+  },
+  "mood_base_luteal": {
+    "type": "int",
+    "description": "黄体期心情基线",
+    "hint": "经前阶段 AI 的基础心情值，负值表示容易易怒、情绪敏感。",
+    "default": -2,
+    "min": -10,
+    "max": 10
+  },
+
+  "enable_cold_violence": {
+    "type": "bool",
+    "description": "允许 AI 冷暴力（完全不理人）",
+    "hint": "用户态度恶劣或 AI 心情不好时，AI 可能选择完全不回复消息，持续一段时间。",
+    "default": true
+  },
+  "enable_read_no_reply": {
+    "type": "bool",
+    "description": "允许 AI 已读不回（假装看到但不回）",
+    "hint": "AI 不想理用户但不想做得太明显时，会连续几轮假装没看到消息。",
+    "default": true
+  },
+  "enable_perfunctory_reply": {
+    "type": "bool",
+    "description": "允许 AI 敷衍回复",
+    "hint": "AI 心情不好或对用户话题没兴趣时，回复会变得冷淡、简短、没感情。",
+    "default": true
+  },
+  "enable_seek_comfort": {
+    "type": "bool",
+    "description": "允许 AI 向用户撒娇/求安慰",
+    "hint": "AI 心情不好但还想互动时，会暗示用户关心自己、抱抱自己。",
+    "default": true
+  },
+  "enable_delayed_reply": {
+    "type": "bool",
+    "description": "允许 AI 模拟\"姗姗来迟\"的回复风格",
+    "hint": "AI 回复时会带一种\"刚看到消息\"或\"刚才在忙\"的感觉，并不是真的延迟几分钟发送。",
+    "default": true
+  },
+  "enable_emotional_outburst": {
+    "type": "bool",
+    "description": "允许 AI 情绪爆发",
+    "hint": "AI 被惹毛或处于黄体期易怒状态时，可能突然发火、委屈哭诉或撒娇式发作。",
+    "default": true
+  },
+  "enable_topic_shift": {
+    "type": "bool",
+    "description": "允许 AI 转移话题",
+    "hint": "AI 对用户当前话题完全不感兴趣时，会巧妙地把话题引向自己想聊的内容。",
+    "default": true
+  },
+
+  "mood_detector_prompt": {
+    "type": "text",
+    "description": "情绪检测模型的系统提示词（高级）",
+    "default": "",
+    "hint": "留空使用内置默认。这是发给\"情绪检测 AI\"的指令，不是发给主 AI 的。除非你知道自己在干嘛，否则不要改。"
+  },
+  "max_mood_detector_tokens": {
+    "type": "int",
+    "description": "情绪检测模型每次最多回复多少 token",
+    "hint": "检测模型的 JSON 回复一般很短，500 足够。如果改大了会多花钱。",
+    "default": 500,
+    "min": 100,
+    "max": 2000
+  },
+  "mood_detector_context_length": {
+    "type": "int",
+    "description": "传给情绪检测模型的最近对话轮数",
+    "hint": "检测模型能看到最近几轮对话来判断用户态度。越多越有上下文，但越耗 token。",
+    "default": 6,
+    "min": 0,
+    "max": 20
+  },
+  "mood_detector_read_system_prompt": {
+    "type": "bool",
+    "description": "让情绪检测模型了解 AI 的人设",
+    "hint": "开启后情绪检测会读取主 AI 的系统提示词（比如\"你是一个高冷的御姐\"），这样冷面御姐和可爱萝莉对同一句话的反应会不一样。关闭可省 token。",
+    "default": true
+  },
+  "mood_detector_system_prompt_max_length": {
+    "type": "int",
+    "description": "人设提示词传给检测模型时的最大长度",
+    "hint": "如果主 AI 的人设提示词特别长，超过这个长度会被截断，防止检测模型 token 爆炸。",
+    "default": 800,
+    "min": 100,
+    "max": 3000
+  },
+
+  "prompt_compression_enabled": {
+    "type": "bool",
+    "description": "启用提示词压缩（省 token）",
+    "hint": "开启后会调用 LLM 把长提示词压缩成精华版，减少每次对话消耗的 token。压缩结果保存在内存中，重启后如果缓存还在就不需要重新压缩。",
+    "default": false
+  },
+  "prompt_compression_auto_trigger": {
+    "type": "bool",
+    "description": "插件启动时自动压缩提示词",
+    "hint": "开启后每次插件重载都会自动跑一遍压缩。关闭后需要手动发送 period compress 指令触发。",
+    "default": true,
+    "condition": { "prompt_compression_enabled": true }
+  },
+  "prompt_compression_ratio": {
+    "type": "int",
+    "description": "压缩目标（原文的百分之几）",
+    "hint": "比如设 30 表示压缩后字数大约是原文的 30%。越小越省 token，但可能丢失细节。",
+    "default": 30,
+    "min": 10,
+    "max": 80,
+    "condition": { "prompt_compression_enabled": true }
+  },
+  "prompt_compression_max_tokens": {
+    "type": "int",
+    "description": "压缩模型每次调用最多用多少 token",
+    "hint": "压缩一次提示词本身也要消耗 token，这里限制单次压缩的上限。",
+    "default": 1000,
+    "min": 200,
+    "max": 4000,
+    "condition": { "prompt_compression_enabled": true }
+  }
 }
