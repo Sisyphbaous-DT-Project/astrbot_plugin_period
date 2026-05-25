@@ -1,5 +1,6 @@
 """Session state persistence (JSON with atomic writes)."""
 
+import copy
 import json
 import os
 import asyncio
@@ -73,6 +74,11 @@ class CycleStore:
             if umo in all_data:
                 del all_data[umo]
                 await self._save(all_data)
+
+    async def get_all(self) -> dict[str, dict[str, Any]]:
+        """Return a deep copy of all persisted session data."""
+        async with self._lock:
+            return copy.deepcopy(await self._load())
 
     async def toggle(self, umo: str) -> bool:
         """Toggle enabled state for a session. Returns new state."""

@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>周期管理面板</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      color: #333;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+
+    .container { max-width: 1200px; margin: 0 auto; }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .header h1 {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 14px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      white-space: nowrap;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn:active { opacity: 0.7; }
+    .btn-primary { background: #1976d2; color: #fff; }
+    .btn-success { background: #4caf50; color: #fff; }
+    .btn-danger { background: #ef5350; color: #fff; }
+    .btn-warning { background: #ff9800; color: #fff; }
+    .btn-secondary { background: #e0e0e0; color: #333; }
+    .btn-sm { padding: 3px 8px; font-size: 12px; }
+
+    /* Cards */
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .card-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #1a1a1a;
+    }
+
+    /* Global config */
+    .config-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px;
+    }
+    .config-item {
+      background: #f8f9fa;
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+    .config-item .label {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 2px;
+    }
+    .config-item .value {
+      font-size: 14px;
+      font-weight: 500;
+      color: #1a1a1a;
+    }
+    .config-item .value.empty { color: #999; font-style: italic; }
+
+    /* Table */
+    .table-wrap { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid #eee;
+      white-space: nowrap;
+    }
+    th {
+      font-weight: 600;
+      color: #666;
+      background: #fafafa;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    tr:hover { background: #f8f9fa; }
+    td { vertical-align: middle; }
+
+    /* UMO cell */
+    .umo-cell {
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      direction: rtl;
+      text-align: left;
+    }
+    .umo-cell[title] { cursor: help; }
+
+    /* Phase badge */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .badge-menstrual { background: #fee2e2; color: #991b1b; }
+    .badge-follicular { background: #dbeafe; color: #1e40af; }
+    .badge-ovulatory { background: #ede9fe; color: #5b21b6; }
+    .badge-luteal { background: #fef3c7; color: #92400e; }
+    .source-tag {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      margin-left: 4px;
+      background: #e5e7eb;
+      color: #6b7280;
+    }
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .dot-menstrual { background: #ef4444; }
+    .dot-follicular { background: #3b82f6; }
+    .dot-ovulatory { background: #8b5cf6; }
+    .dot-luteal { background: #f59e0b; }
+
+    /* Toggle switch */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 20px;
+      cursor: pointer;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: #ccc;
+      border-radius: 20px;
+      transition: 0.2s;
+    }
+    .slider::before {
+      content: "";
+      position: absolute;
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: 0.2s;
+    }
+    .switch input:checked + .slider { background: #4caf50; }
+    .switch input:checked + .slider::before { transform: translateX(16px); }
+
+    /* Actions */
+    .actions { display: flex; gap: 4px; flex-wrap: wrap; }
+
+    /* Empty state */
+    .empty {
+      text-align: center;
+      padding: 40px;
+      color: #999;
+    }
+    .empty-icon {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.4);
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: #fff;
+      border-radius: 10px;
+      padding: 20px;
+      width: 360px;
+      max-width: 90%;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+    }
+    .modal-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    .modal-body { margin-bottom: 16px; }
+    .modal-body label {
+      display: block;
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 4px;
+    }
+    .modal-body input[type="date"] {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    /* Loading */
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #999;
+    }
+    .spinner {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid #e0e0e0;
+      border-top-color: #1976d2;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Error */
+    .error-bar {
+      background: #fee2e2;
+      color: #991b1b;
+      padding: 10px 14px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>周期管理面板</h1>
+      <button class="btn btn-primary" id="btn-refresh" onclick="loadData()">
+        <span>刷新</span>
+      </button>
+    </div>
+
+    <div id="error-bar"></div>
+
+    <!-- Global Config Card -->
+    <div class="card">
+      <div class="card-title">全局默认配置</div>
+      <div class="config-grid" id="global-config">
+        <div class="loading"><span class="spinner"></span>加载中...</div>
+      </div>
+    </div>
+
+    <!-- Sessions Table Card -->
+    <div class="card">
+      <div class="card-title">会话列表</div>
+      <div class="table-wrap" id="sessions-container">
+        <div class="loading"><span class="spinner"></span>加载中...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Anchor Date Modal -->
+  <div class="modal-overlay" id="modal-anchor">
+    <div class="modal">
+      <div class="modal-title">修改锚点日期</div>
+      <div class="modal-body">
+        <label>新的经期首日</label>
+        <input type="date" id="input-date">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()">取消</button>
+        <button class="btn btn-primary" onclick="confirmAnchor()">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Wait for AstrBot bridge
+    let bridgeReady = false;
+
+    async function init() {
+      // Bridge SDK is injected by AstrBot asynchronously; poll until available
+      let attempts = 0;
+      while (typeof AstrBotPluginPage === 'undefined' && attempts < 50) {
+        await new Promise(r => setTimeout(r, 100));
+        attempts++;
+      }
+      if (typeof AstrBotPluginPage === 'undefined') {
+        showError('Bridge SDK 初始化失败: AstrBotPluginPage 不可用');
+        return;
+      }
+      try {
+        await AstrBotPluginPage.ready();
+        bridgeReady = true;
+        loadData();
+      } catch (e) {
+        showError('Bridge SDK 初始化失败: ' + e.message);
+      }
+    }
+
+    // Phase colors mapping
+    const PHASE_CLASS = {
+      menstrual: 'badge-menstrual',
+      follicular: 'badge-follicular',
+      ovulatory: 'badge-ovulatory',
+      luteal: 'badge-luteal',
+    };
+    const DOT_CLASS = {
+      menstrual: 'dot-menstrual',
+      follicular: 'dot-follicular',
+      ovulatory: 'dot-ovulatory',
+      luteal: 'dot-luteal',
+    };
+
+    let currentSessions = [];
+    let pendingUmo = null;
+
+    function showError(msg) {
+      const el = document.getElementById('error-bar');
+      if (msg) {
+        el.textContent = msg;
+        el.className = 'error-bar';
+      } else {
+        el.textContent = '';
+        el.className = '';
+      }
+    }
+
+    async function loadData() {
+      showError('');
+      document.getElementById('global-config').innerHTML = '<div class="loading"><span class="spinner"></span>加载中...</div>';
+      document.getElementById('sessions-container').innerHTML = '<div class="loading"><span class="spinner"></span>加载中...</div>';
+
+      try {
+        const [sessionsRes, configRes] = await Promise.all([
+          AstrBotPluginPage.apiGet('sessions'),
+          AstrBotPluginPage.apiGet('config'),
+        ]);
+
+        renderConfig(configRes);
+        renderSessions(sessionsRes);
+      } catch (e) {
+        showError('加载数据失败: ' + e.message);
+        document.getElementById('global-config').innerHTML = '';
+        document.getElementById('sessions-container').innerHTML = '';
+      }
+    }
+
+    function renderConfig(data) {
+      const cfg = data.data || {};
+      const items = [
+        { label: '默认锚点日期', value: cfg.default_anchor_date || '未设置', empty: !cfg.default_anchor_date },
+        { label: '自动启用', value: cfg.default_enabled ? '是' : '否' },
+        { label: '默认周期长度', value: (cfg.default_cycle_length || 28) + ' 天' },
+        { label: '默认经期长度', value: (cfg.default_period_length || 5) + ' 天' },
+        { label: '排卵日', value: '第 ' + (cfg.cycle_settings?.ovulation_day || 14) + ' 天' },
+        { label: '排卵期窗口', value: (cfg.cycle_settings?.ovulation_window || 3) + ' 天' },
+      ];
+
+      document.getElementById('global-config').innerHTML = items.map(item => `
+        <div class="config-item">
+          <div class="label">${item.label}</div>
+          <div class="value ${item.empty ? 'empty' : ''}">${item.value}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderSessions(data) {
+      const sessions = (data.data?.sessions) || [];
+      currentSessions = sessions;
+
+      if (sessions.length === 0) {
+        document.getElementById('sessions-container').innerHTML = `
+          <div class="empty">
+            <div class="empty-icon">📋</div>
+            <div>暂无会话数据</div>
+            <div style="font-size: 12px; margin-top: 4px;">在聊天中使用 /period set 设置周期后，会话将显示在这里</div>
+          </div>
+        `;
+        return;
+      }
+
+      const rows = sessions.map(s => {
+        const umoShort = s.umo.split(':').pop() || s.umo;
+        const badgeClass = PHASE_CLASS[s.phase] || '';
+        const dotClass = DOT_CLASS[s.phase] || '';
+        const sourceTag = s.source === 'global_default'
+          ? '<span class="source-tag">全局默认</span>'
+          : '';
+        return `
+          <tr data-umo="${escapeHtml(s.umo)}">
+            <td><span class="umo-cell" title="${escapeHtml(s.umo)}">${escapeHtml(umoShort)}${sourceTag}</span></td>
+            <td>
+              <label class="switch" title="开关">
+                <input type="checkbox" ${s.enabled ? 'checked' : ''} data-action="toggle">
+                <span class="slider"></span>
+              </label>
+            </td>
+            <td><span class="badge ${badgeClass}"><span class="dot ${dotClass}"></span>${escapeHtml(s.phase_label)}</span></td>
+            <td>阶段第 ${s.phase_day} 天 / 周期第 ${s.total_day} 天</td>
+            <td>${s.days_to_next === 0 ? '正处于经期' : '还有 ' + s.days_to_next + ' 天'}</td>
+            <td>${s.advance_days || 0} 天</td>
+            <td>
+              <div class="actions">
+                <button class="btn btn-sm btn-secondary" data-action="advance" data-days="1">+1</button>
+                <button class="btn btn-sm btn-secondary" data-action="advance" data-days="-1">-1</button>
+                <button class="btn btn-sm btn-primary" data-action="anchor">改日期</button>
+                <button class="btn btn-sm btn-danger" data-action="delete">删除</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      document.getElementById('sessions-container').innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>会话</th>
+              <th>开关</th>
+              <th>当前阶段</th>
+              <th>天数</th>
+              <th>距下次</th>
+              <th>快进</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+      bindRowEvents();
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function bindRowEvents() {
+      document.querySelectorAll('#sessions-container tbody tr').forEach(row => {
+        const umo = row.dataset.umo;
+        if (!umo) return;
+
+        const toggleInput = row.querySelector('input[data-action="toggle"]');
+        if (toggleInput) {
+          toggleInput.onchange = () => toggleSession(umo);
+        }
+
+        row.querySelectorAll('button[data-action="advance"]').forEach(btn => {
+          const days = parseInt(btn.dataset.days, 10);
+          btn.onclick = () => advanceSession(umo, days);
+        });
+
+        const anchorBtn = row.querySelector('button[data-action="anchor"]');
+        if (anchorBtn) {
+          anchorBtn.onclick = () => openAnchorModal(umo);
+        }
+
+        const deleteBtn = row.querySelector('button[data-action="delete"]');
+        if (deleteBtn) {
+          deleteBtn.onclick = () => deleteSession(umo);
+        }
+      });
+    }
+
+    async function toggleSession(umo) {
+      showError('');
+      try {
+        await AstrBotPluginPage.apiPost(`sessions/${encodeURIComponent(umo)}/toggle`);
+        loadData();
+      } catch (e) {
+        showError('切换失败: ' + e.message);
+      }
+    }
+
+    async function advanceSession(umo, days) {
+      showError('');
+      try {
+        await AstrBotPluginPage.apiPost(`sessions/${encodeURIComponent(umo)}/advance`, { days });
+        loadData();
+      } catch (e) {
+        showError('快进失败: ' + e.message);
+      }
+    }
+
+    function openAnchorModal(umo) {
+      pendingUmo = umo;
+      const session = currentSessions.find(s => s.umo === umo);
+      document.getElementById('input-date').value = session ? session.anchor_date : '';
+      document.getElementById('modal-anchor').classList.add('show');
+    }
+
+    function closeModal() {
+      document.getElementById('modal-anchor').classList.remove('show');
+      pendingUmo = null;
+    }
+
+    async function confirmAnchor() {
+      if (!pendingUmo) return;
+      const date = document.getElementById('input-date').value;
+      if (!date) {
+        showError('请选择日期');
+        return;
+      }
+      showError('');
+      try {
+        await AstrBotPluginPage.apiPost(`sessions/${encodeURIComponent(pendingUmo)}/anchor`, { date });
+        closeModal();
+        loadData();
+      } catch (e) {
+        showError('修改日期失败: ' + e.message);
+      }
+    }
+
+    async function deleteSession(umo) {
+      if (!confirm('确定要删除该会话的周期数据吗？此操作不可恢复。')) return;
+      showError('');
+      try {
+        await AstrBotPluginPage.apiPost(`sessions/${encodeURIComponent(umo)}/delete`);
+        loadData();
+      } catch (e) {
+        showError('删除失败: ' + e.message);
+      }
+    }
+
+    // Close modal on overlay click
+    document.getElementById('modal-anchor').addEventListener('click', function(e) {
+      if (e.target === this) closeModal();
+    });
+
+    // Init
+    init();
+  </script>
+</body>
+</html>

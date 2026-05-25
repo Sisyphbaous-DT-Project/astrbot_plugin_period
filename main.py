@@ -2,6 +2,8 @@
 
 import datetime
 
+from quart import jsonify, request
+
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.event.filter import PermissionType, permission_type
 from astrbot.api.star import Context, Star, StarTools, register
@@ -14,7 +16,7 @@ from .core.store import CycleStore
 from .core.prompt import PromptBuilder
 
 
-@register("astrbot_plugin_period", "C₂₂H₂₅NO₆", "生理周期模拟插件", "1.0.0",
+@register("astrbot_plugin_period", "C₂₂H₂₅NO₆", "生理周期模拟插件", "1.5.0",
           "https://github.com/Sisyphbaous-DT-Project/astrbot_plugin_period")
 class PeriodPlugin(Star):
     """Plugin that simulates physiological cycles for female-persona bots."""
@@ -29,6 +31,8 @@ class PeriodPlugin(Star):
         self._anchored_sessions: set[str] = set()  # Sessions with anchor injected
         self._inject_counters: dict[str, int] = {}  # Interval injection counters
         self._warmup_counters: dict[str, int] = {}  # Warmup round counters
+
+        self._register_web_apis()
 
     # ------------------------------------------------------------------ #
     #  Helper methods
@@ -49,6 +53,215 @@ class PeriodPlugin(Star):
                 return True, ""
             return False, "当前仅允许查看状态，设置类指令已被关闭，如需调整请前往插件配置修改指令权限控制"
         return True, ""
+
+    # ------------------------------------------------------------------ #
+    #  Web API (for dashboard)
+    # ------------------------------------------------------------------ #
+
+    def _register_web_apis(self) -> None:
+        """Register Web API routes for the dashboard page."""
+        base = f"/{self.__class__.name}"
+        self.context.register_web_api(
+            f"{base}/sessions",
+            self._webapi_list_sessions,
+            ["GET"],
+            "List all session cycle statuses",
+        )
+        self.context.register_web_api(
+            f"{base}/config",
+            self._webapi_get_config,
+            ["GET"],
+            "Get global default config",
+        )
+        self.context.register_web_api(
+            f"{base}/sessions/<umo>/toggle",
+            self._webapi_toggle_session,
+            ["POST"],
+            "Toggle session enabled state",
+        )
+        self.context.register_web_api(
+            f"{base}/sessions/<umo>/advance",
+            self._webapi_advance_session,
+            ["POST"],
+            "Advance session days",
+        )
+        self.context.register_web_api(
+            f"{base}/sessions/<umo>/anchor",
+            self._webapi_set_anchor,
+            ["POST"],
+            "Set session anchor date",
+        )
+        self.context.register_web_api(
+            f"{base}/sessions/<umo>/delete",
+            self._webapi_delete_session,
+            ["POST"],
+            "Delete session data",
+        )
+
+    def _infer_source(self, cfg: dict) -> str:
+        """Infer whether a session config originates from global defaults."""
+        default_anchor = self.config.get("default_anchor_date", "")
+        if not default_anchor:
+            return "manual"
+        cycle_settings = self.config.get("cycle_settings", {})
+        expected = {
+            "anchor_date": default_anchor,
+            "cycle_length": self.config.get("default_cycle_length", 28),
+            "period_length": self.config.get("default_period_length", 5),
+            "ovulation_day": cycle_settings.get("ovulation_day", 14),
+            "ovulation_window": cycle_settings.get("ovulation_window", 3),
+            "enabled": True,
+        }
+        for key in expected:
+            if cfg.get(key) != expected[key]:
+                return "manual"
+        return "global_default"
+
+    def _serialize_session(self, umo: str, cfg: dict) -> dict | None:
+        """Build session dict with live phase calculation."""
+        if not cfg or "anchor_date" not in cfg:
+            return None
+        try:
+            info = self.engine.get_phase(
+                cfg["anchor_date"],
+                cfg.get("cycle_length", 28),
+                cfg.get("period_length", 5),
+                cfg.get("ovulation_day", 14),
+                cfg.get("ovulation_window", 3),
+                cfg.get("advance_days", 0),
+            )
+        except Exception:
+            return None
+
+        phase_labels = {
+            "menstrual": "月经期",
+            "follicular": "卵泡期",
+            "ovulatory": "排卵期",
+            "luteal": "黄体期",
+        }
+        return {
+            "umo": umo,
+            "source": self._infer_source(cfg),
+            "enabled": cfg.get("enabled", True),
+            "anchor_date": cfg["anchor_date"],
+            "cycle_length": cfg.get("cycle_length", 28),
+            "period_length": cfg.get("period_length", 5),
+            "ovulation_day": cfg.get("ovulation_day", 14),
+            "ovulation_window": cfg.get("ovulation_window", 3),
+            "advance_days": cfg.get("advance_days", 0),
+            "phase": info.phase,
+            "phase_day": info.day,
+            "total_day": info.total_day,
+            "days_to_next": info.days_to_next,
+            "phase_label": phase_labels.get(info.phase, info.phase),
+        }
+
+    async def _webapi_list_sessions(self):
+        """GET /astrbot_plugin_period/sessions"""
+        all_data = await self.store.get_all()
+        sessions = []
+        for umo, cfg in all_data.items():
+            serialized = self._serialize_session(umo, cfg)
+            if serialized:
+                sessions.append(serialized)
+        return jsonify(
+            {"status": "ok", "data": {"sessions": sessions, "count": len(sessions)}}
+        )
+
+    async def _webapi_get_config(self):
+        """GET /astrbot_plugin_period/config"""
+        cycle_settings = self.config.get("cycle_settings", {})
+        return jsonify(
+            {
+                "status": "ok",
+                "data": {
+                    "default_anchor_date": self.config.get("default_anchor_date", ""),
+                    "default_enabled": self.config.get("default_enabled", False),
+                    "default_cycle_length": self.config.get("default_cycle_length", 28),
+                    "default_period_length": self.config.get("default_period_length", 5),
+                    "cycle_settings": {
+                        "ovulation_day": cycle_settings.get("ovulation_day", 14),
+                        "ovulation_window": cycle_settings.get("ovulation_window", 3),
+                    },
+                },
+            }
+        )
+
+    async def _webapi_toggle_session(self, umo: str):
+        """POST /astrbot_plugin_period/sessions/<umo>/toggle"""
+        cfg = await self._get_session_config(umo)
+        if not cfg or "anchor_date" not in cfg:
+            return jsonify({"status": "error", "message": "会话未配置周期参数"}), 404
+
+        if not await self.store.get(umo):
+            await self.store.set(umo, cfg)
+
+        await self.store.toggle(umo)
+        cfg = await self.store.get(umo)
+        return jsonify({"status": "ok", "data": self._serialize_session(umo, cfg)})
+
+    async def _webapi_advance_session(self, umo: str):
+        """POST /astrbot_plugin_period/sessions/<umo>/advance"""
+        body = await request.get_json() or {}
+        days = body.get("days", 1)
+        if not isinstance(days, int):
+            return jsonify({"status": "error", "message": "days 必须是整数"}), 400
+
+        cfg = await self._get_session_config(umo)
+        if not cfg:
+            return jsonify({"status": "error", "message": "会话未配置周期参数"}), 404
+
+        if not await self.store.get(umo):
+            await self.store.set(umo, cfg)
+
+        cfg = await self.store.get(umo)
+        cfg["advance_days"] = cfg.get("advance_days", 0) + days
+        await self.store.set(umo, cfg)
+
+        return jsonify({"status": "ok", "data": self._serialize_session(umo, cfg)})
+
+    async def _webapi_set_anchor(self, umo: str):
+        """POST /astrbot_plugin_period/sessions/<umo>/anchor"""
+        body = await request.get_json() or {}
+        date_str = body.get("date", "")
+        if not date_str:
+            return jsonify({"status": "error", "message": "缺少 date 参数"}), 400
+
+        try:
+            datetime.datetime.strptime(date_str, "%Y-%m-%d")
+        except ValueError:
+            return (
+                jsonify(
+                    {"status": "error", "message": "日期格式错误，请使用 YYYY-MM-DD 格式"}
+                ),
+                400,
+            )
+
+        cfg = await self._get_session_config(umo)
+        if not cfg:
+            return jsonify({"status": "error", "message": "会话未配置周期参数"}), 404
+
+        if not await self.store.get(umo):
+            await self.store.set(umo, cfg)
+
+        cfg = await self.store.get(umo)
+        cfg["anchor_date"] = date_str
+        cfg["advance_days"] = 0
+        await self.store.set(umo, cfg)
+
+        self._anchored_sessions.discard(umo)
+        self._inject_counters.pop(umo, None)
+        self._warmup_counters.pop(umo, None)
+
+        return jsonify({"status": "ok", "data": self._serialize_session(umo, cfg)})
+
+    async def _webapi_delete_session(self, umo: str):
+        """POST /astrbot_plugin_period/sessions/<umo>/delete"""
+        await self.store.delete(umo)
+        self._anchored_sessions.discard(umo)
+        self._inject_counters.pop(umo, None)
+        self._warmup_counters.pop(umo, None)
+        return jsonify({"status": "ok", "data": {"umo": umo, "deleted": True}})
 
     async def _get_session_config(self, umo: str) -> dict | None:
         """Get session config, falling back to global defaults if available."""
@@ -284,6 +497,10 @@ class PeriodPlugin(Star):
         cfg = await self._get_session_config(umo)
         if not cfg or not cfg.get("enabled") or "anchor_date" not in cfg:
             return
+
+        # Auto-persist global defaults so they appear in WebUI
+        if not await self.store.get(umo):
+            await self.store.set(umo, cfg)
 
         # Warmup check
         warmup = self.config.get("warmup_rounds", 0)

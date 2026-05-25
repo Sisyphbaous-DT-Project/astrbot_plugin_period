@@ -6,6 +6,11 @@ from pathlib import Path
 from unittest.mock import MagicMock, AsyncMock
 import pytest
 
+# Ensure project root is on sys.path so absolute imports like `from core.engine ...` work
+_PROJECT_ROOT = Path(__file__).parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
 # --------------------------------------------------------------------------- #
 #  Mock AstrBot modules before any plugin code imports them
 # --------------------------------------------------------------------------- #
@@ -29,6 +34,33 @@ astrbot.core.agent.message = _make_module("astrbot.core.agent.message")
 astrbot.core.star = _make_module("astrbot.core.star")
 astrbot.core.star.register = _make_module("astrbot.core.star.register")
 astrbot.core.star.filter = _make_module("astrbot.core.star.filter")
+
+# --- quart (for web api tests) ---
+quart_mod = _make_module("quart")
+
+class _MockRequest:
+    _json = {}
+    @classmethod
+    async def get_json(cls):
+        return cls._json
+    @classmethod
+    def set_json(cls, data):
+        cls._json = data
+
+class _MockJsonify:
+    def __init__(self, data):
+        self.data = data
+    def __call__(self, *args, **kwargs):
+        return self.data
+    def get_json(self):
+        return self.data
+
+def mock_jsonify(data, *args, **kwargs):
+    return data
+
+quart_mod.request = _MockRequest()
+quart_mod.jsonify = mock_jsonify
+sys.modules["quart"] = quart_mod
 
 # --- astrbot.api.event.filter ---
 filter_mod = sys.modules["astrbot.api.event.filter"]
@@ -91,7 +123,11 @@ class Star:
         self.context = context
 
 class Context:
-    pass
+    def __init__(self):
+        self.registered_web_apis = []
+
+    def register_web_api(self, route, view_handler, methods, desc):
+        self.registered_web_apis.append((route, view_handler, methods, desc))
 
 class StarTools:
     @classmethod
@@ -104,6 +140,7 @@ class register:
 
     def __call__(self, cls):
         cls._plugin_name = self.name
+        cls.name = self.name  # AstrBot injects this before instantiation
         return cls
 
 star_mod.Star = Star
@@ -227,6 +264,14 @@ def sample_config():
             "ovulation_window": 3,
         },
     }
+
+
+@pytest.fixture(autouse=True)
+def reset_mock_request():
+    """Reset mock request body between tests."""
+    yield
+    from quart import request
+    request.set_json({})
 
 
 @pytest.fixture
