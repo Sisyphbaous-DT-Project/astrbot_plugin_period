@@ -787,7 +787,7 @@ class PeriodPlugin(Star):
         scope = self.config.get("mood_scope", "per_umo")
         mood_umo = "__global__" if scope == "global" else umo
 
-        lock = self._get_mood_lock(mood_umo)
+        lock = await self._get_mood_lock(mood_umo)
         async with lock:
             mood_state = await self.mood_store.get(mood_umo) or MoodState()
             logger.info(
