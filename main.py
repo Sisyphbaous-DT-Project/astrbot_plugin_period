@@ -1,5 +1,6 @@
 """AstrBot plugin for physiological cycle simulation."""
 
+import asyncio
 import datetime
 
 from quart import jsonify, request
