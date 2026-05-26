@@ -618,7 +618,7 @@ class PeriodPlugin(Star):
     @period_group.command("mood")
     async def period_mood(self, event: AstrMessageEvent):
         """查看当前情绪状态 /period mood"""
-        if not self.config.get("mood_system_enabled", True):
+        if not self.config.get("mood_system_enabled", False):
             yield event.plain_result("情绪管理系统已关闭")
             return
         umo = event.unified_msg_origin
@@ -630,7 +630,7 @@ class PeriodPlugin(Star):
     @permission_type(PermissionType.ADMIN)
     async def period_mood_reset(self, event: AstrMessageEvent):
         """重置当前会话情绪状态 /period moodreset"""
-        if not self.config.get("mood_system_enabled", True):
+        if not self.config.get("mood_system_enabled", False):
             yield event.plain_result("情绪管理系统已关闭")
             return
         umo = event.unified_msg_origin
@@ -643,7 +643,7 @@ class PeriodPlugin(Star):
     @period_group.command("lift")
     async def period_lift(self, event: AstrMessageEvent):
         """手动解除冷暴力等活跃工具 /period lift"""
-        if not self.config.get("mood_system_enabled", True):
+        if not self.config.get("mood_system_enabled", False):
             yield event.plain_result("情绪管理系统已关闭")
             return
         umo = event.unified_msg_origin
@@ -766,7 +766,7 @@ class PeriodPlugin(Star):
         # ============================================================== #
         #  Mood / Emotion System
         # ============================================================== #
-        if self.config.get("mood_system_enabled", True):
+        if self.config.get("mood_system_enabled", False):
             logger.info(f"[PeriodPlugin] 用户 {umo} 触发情绪检测")
             await self._run_mood_system(event, req, umo, info, original_system_prompt)
 
@@ -934,7 +934,7 @@ class PeriodPlugin(Star):
         umo = event.unified_msg_origin
 
         # ---- Mood system interception (cold_violence / read_no_reply) ----
-        if self.config.get("mood_system_enabled", True):
+        if self.config.get("mood_system_enabled", False):
             scope = self.config.get("mood_scope", "per_umo")
             mood_umo = "__global__" if scope == "global" else umo
             lock = await self._get_mood_lock(mood_umo)
