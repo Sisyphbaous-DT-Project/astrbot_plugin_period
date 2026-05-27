@@ -40,7 +40,7 @@ class PeriodPlugin(Star):
         self.prompt_compressor = PromptCompressor(self.context, self.config, self.plugin_data_dir)
         self.prompt_builder = PromptBuilder(self.config, self.prompt_compressor)
 
-        self._anchored_sessions: set[str] = set()  # Sessions with anchor injected
+        self._anchored_sessions: set[str] = set()  # Sessions visited (for WebUI tracking)
         self._inject_counters: dict[str, int] = {}  # Interval injection counters
         self._warmup_counters: dict[str, int] = {}  # Warmup round counters
 
@@ -762,22 +762,88 @@ class PeriodPlugin(Star):
             cfg.get("advance_days", 0),
         )
 
-        # Save original system prompt before injecting anchor
-        # so mood detector sees the bot's persona without our anchor
+        # Save original system prompt before injecting our content
+        # so mood detector sees the bot's persona without our additions
         original_system_prompt = req.system_prompt or ""
 
-        # Static anchor: inject once per session
+        # Anchor is static content — inject into system_prompt on every request.
+        # (Previously only once via _anchored_sessions; but req.system_prompt
+        # is a fresh object each round, so the anchor was lost after round 1.)
+        anchor = self.prompt_builder.get_anchor()
+        req.system_prompt = original_system_prompt + ("\n\n" if original_system_prompt else "") + anchor
+        logger.debug(
+            "[PeriodPlugin][umo=%s] 锚点已注入 system_prompt, 长度=%d",
+            umo, len(anchor),
+        )
+
+        # Track session for WebUI listing (sessions using global defaults)
         if umo not in self._anchored_sessions:
-            anchor = self.prompt_builder.get_anchor()
-            req.system_prompt = original_system_prompt + ("\n\n" if original_system_prompt else "") + anchor
             self._anchored_sessions.add(umo)
 
-        # Dynamic state: inject every request (when frequency allows)
+        # Dynamic state: choose injection location based on config
         hour = datetime.datetime.now().hour
         dynamic = self.prompt_builder.build_dynamic(info.phase, info.day, hour)
-        req.extra_user_content_parts.append(
-            TextPart(text=dynamic).mark_as_temp()
+        location = self.config.get("inject_location", "user_message_before")
+        logger.info(
+            "[PeriodPlugin][umo=%s] 动态状态注入位置: %s",
+            umo, location,
         )
+
+        if location == "system_prompt_append":
+            req.system_prompt += "\n\n" + dynamic
+            logger.debug(
+                "[PeriodPlugin][umo=%s] 动态状态追加到 system_prompt, 长度=%d",
+                umo, len(dynamic),
+            )
+        elif location == "user_message_before":
+            req.prompt = dynamic + "\n\n" + (req.prompt or "")
+            logger.debug(
+                "[PeriodPlugin][umo=%s] 动态状态前置到用户消息, 长度=%d",
+                umo, len(dynamic),
+            )
+        elif location == "fake_tool_call":
+            provider = self.context.get_using_provider(umo)
+            provider_type = ""
+            if provider and hasattr(provider, "provider_config"):
+                cfg = provider.provider_config
+                provider_type = cfg.get("type", "") if isinstance(cfg, dict) else ""
+            if provider_type == "googlegenai_chat_completion":
+                logger.info(
+                    "[PeriodPlugin][umo=%s] fake_tool_call 降级为 user_message_before (Gemini)",
+                    umo,
+                )
+                req.prompt = dynamic + "\n\n" + (req.prompt or "")
+            else:
+                import uuid
+                call_id = f"period_query_{uuid.uuid4().hex[:8]}"
+                logger.debug(
+                    "[PeriodPlugin][umo=%s] 伪造工具调用注入, call_id=%s",
+                    umo, call_id,
+                )
+                req.contexts.extend([
+                    {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [{
+                            "id": call_id,
+                            "type": "function",
+                            "function": {"name": "query_period_status", "arguments": "{}"}
+                        }]
+                    },
+                    {
+                        "role": "tool",
+                        "tool_call_id": call_id,
+                        "content": dynamic
+                    }
+                ])
+        else:  # extra_user_content_parts
+            req.extra_user_content_parts.append(
+                TextPart(text=dynamic).mark_as_temp()
+            )
+            logger.debug(
+                "[PeriodPlugin][umo=%s] 动态状态追加到 extra_user_content_parts, 长度=%d",
+                umo, len(dynamic),
+            )
 
         # ============================================================== #
         #  Mood / Emotion System

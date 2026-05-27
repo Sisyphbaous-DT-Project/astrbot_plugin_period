@@ -109,6 +109,13 @@
     "default": "every_request",
     "hint": "every_request = 每次对话都注入；interval_3 = 每 3 次对话注入一次；on_trigger = 只有用户说了特定关键词时才注入；only_status = 只在用户查状态（period status）时注入，平时不干扰对话。"
   },
+  "inject_location": {
+    "type": "string",
+    "description": "动态状态提示词的注入位置",
+    "options": ["user_message_before", "extra_user_content_parts", "system_prompt_append", "fake_tool_call"],
+    "default": "user_message_before",
+    "hint": "user_message_before（默认）：放在用户消息前面，LLM 容易理解为前置指令，不破坏 API 缓存；extra_user_content_parts：放在用户消息后（AstrBot 官方推荐位置）；system_prompt_append：追加到系统提示词（语义最清晰，但动态内容会破坏缓存增加计费）；fake_tool_call：伪造工具调用消息对插入对话历史（LLM 理解为系统查询结果，语义清晰且不破坏缓存，Gemini 会自动降级为 user_message_before）。"
+  },
   "trigger_keywords": {
     "type": "list",
     "description": "触发关键词（仅 on_trigger 模式生效）",

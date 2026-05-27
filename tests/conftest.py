@@ -153,6 +153,9 @@ class Context:
     def register_web_api(self, route, view_handler, methods, desc):
         self.registered_web_apis.append((route, view_handler, methods, desc))
 
+    def get_using_provider(self, umo=None):
+        return None
+
 class StarTools:
     @classmethod
     def get_data_dir(cls):
@@ -181,7 +184,9 @@ class Provider:
 
 class ProviderRequest:
     def __init__(self):
+        self.prompt = ""
         self.system_prompt = ""
+        self.contexts = []
         self.extra_user_content_parts = []
 
 class LLMResponse:
