@@ -139,7 +139,7 @@ class PeriodPlugin(Star):
             "period_length": self.config.get("default_period_length", 5),
             "ovulation_day": cycle_settings.get("ovulation_day", 14),
             "ovulation_window": cycle_settings.get("ovulation_window", 3),
-            "enabled": True,
+            "enabled": self.config.get("default_enabled", False),
         }
         for key in expected:
             if cfg.get(key) != expected[key]:
@@ -189,11 +189,25 @@ class PeriodPlugin(Star):
     async def _webapi_list_sessions(self):
         """GET /astrbot_plugin_period/sessions"""
         all_data = await self.store.get_all()
+        seen: set[str] = set()
         sessions = []
+        # 1) Explicitly configured sessions (from persistent store)
         for umo, cfg in all_data.items():
             serialized = self._serialize_session(umo, cfg)
             if serialized:
                 sessions.append(serialized)
+                seen.add(umo)
+        # 2) Sessions that use global defaults but have not been persisted yet
+        for umo in self._anchored_sessions:
+            if umo in seen:
+                continue
+            cfg = await self._get_session_config(umo)
+            if not cfg or "anchor_date" not in cfg:
+                continue
+            serialized = self._serialize_session(umo, cfg)
+            if serialized:
+                sessions.append(serialized)
+                seen.add(umo)
         return jsonify(
             {"status": "ok", "data": {"sessions": sessions, "count": len(sessions)}}
         )
@@ -313,10 +327,10 @@ class PeriodPlugin(Star):
         if not anchor:
             return None
 
-        if not self.config.get("default_enabled", False):
-            return None
-
-        # Build config from global defaults
+        # Build config from global defaults.
+        # enabled reflects default_enabled so that on_llm_request won't inject
+        # unless the admin explicitly opted in, but commands (status/toggle)
+        # can still see and manipulate the session config.
         cycle_settings = self.config.get("cycle_settings", {})
         return {
             "anchor_date": anchor,
@@ -324,7 +338,7 @@ class PeriodPlugin(Star):
             "period_length": self.config.get("default_period_length", 5),
             "ovulation_day": cycle_settings.get("ovulation_day", 14),
             "ovulation_window": cycle_settings.get("ovulation_window", 3),
-            "enabled": True,
+            "enabled": self.config.get("default_enabled", False),
             "advance_days": 0,
         }
 
@@ -709,9 +723,11 @@ class PeriodPlugin(Star):
         if not cfg or not cfg.get("enabled") or "anchor_date" not in cfg:
             return
 
-        # Auto-persist global defaults so they appear in WebUI
-        if not await self.store.get(umo):
-            await self.store.set(umo, cfg)
+        # NOTE: Do NOT auto-persist global defaults here.
+        # Persisting would freeze the current default values for this session,
+        # making it immune to future global default changes (BUG #1).
+        # Sessions using global defaults appear in WebUI via _webapi_list_sessions.
+        pass
 
         # Warmup check
         warmup = self.config.get("warmup_rounds", 0)

@@ -114,6 +114,15 @@ DEFAULT_INTERPRET_PROMPT = """你是一个工具执行助手。主模型（Bot�
 }"""
 
 
+class _SafeDict(dict):
+    """dict subclass that returns the original placeholder for missing keys,
+    preventing KeyError when a custom template contains fewer placeholders
+    than what the code passes to format_map."""
+
+    def __missing__(self, key: str) -> str:
+        return "{" + key + "}"
+
+
 class MoodDetector:
     """Three-call mood detection engine.
 
@@ -212,14 +221,14 @@ class MoodDetector:
         custom_template = self.config.get("mood_detector_consult_prompt", "")
         template = custom_template if custom_template else DEFAULT_CONSULT_PROMPT
 
-        return template.format(
+        return template.format_map(_SafeDict(
             phase=phase_info.phase,
             phase_label=phase_labels.get(phase_info.phase, phase_info.phase),
             day=phase_info.day,
             tools_summary=tools_summary,
             history=self._format_history(conversation_history),
             user_message=user_message,
-        )
+        ))
 
     # ------------------------------------------------------------------ #
     #  JSON parsing helper
