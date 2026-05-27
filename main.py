@@ -350,7 +350,7 @@ class PeriodPlugin(Star):
 
         enabled = cfg.get("enabled", True)
         if not enabled:
-            return "当前会话的生理周期模拟已暂停，使用periodtoggle可恢复"
+            return "当前会话的生理周期模拟已暂停，使用 period toggle 可恢复"
 
         info = self.engine.get_phase(
             cfg["anchor_date"],
@@ -720,7 +720,7 @@ class PeriodPlugin(Star):
                     return
 
         cfg = await self._get_session_config(umo)
-        if not cfg or not cfg.get("enabled") or "anchor_date" not in cfg:
+        if not cfg or not cfg.get("enabled", True) or "anchor_date" not in cfg:
             return
 
         # NOTE: Do NOT auto-persist global defaults here.
@@ -827,6 +827,13 @@ class PeriodPlugin(Star):
 
             history = self._extract_history(req)
 
+            # Respect user preference: don't pass system prompt to mood detector if disabled
+            system_prompt = (
+                original_system_prompt
+                if self.config.get("mood_detector_read_system_prompt", True)
+                else ""
+            )
+
             # ---------- Call 1: Screen ----------
             logger.info("[PeriodPlugin][umo=%s] 调用① 小模型筛选...", mood_umo)
             try:
@@ -836,7 +843,7 @@ class PeriodPlugin(Star):
                     mood_state,
                     history,
                     event.message_str or "",
-                    original_system_prompt,
+                    system_prompt,
                 )
                 need = screen_result.get("need_intervention", False)
                 logger.info(
@@ -863,7 +870,7 @@ class PeriodPlugin(Star):
                     mood_state,
                     history,
                     event.message_str or "",
-                    original_system_prompt,
+                    system_prompt,
                 )
                 logger.info(
                     "[PeriodPlugin][umo=%s] 主模型回复: %s",
@@ -1005,7 +1012,7 @@ class PeriodPlugin(Star):
 
         # ---- OOC Shield ----
         cfg = await self._get_session_config(umo)
-        if not cfg or not cfg.get("enabled"):
+        if not cfg or not cfg.get("enabled", True):
             return
         if not self.config.get("ooc_shield", True):
             return
