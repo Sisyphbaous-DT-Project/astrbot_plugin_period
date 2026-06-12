@@ -129,22 +129,9 @@ class PeriodPlugin(Star):
 
     def _infer_source(self, cfg: dict) -> str:
         """Infer whether a session config originates from global defaults."""
-        default_anchor = self.config.get("default_anchor_date", "")
-        if not default_anchor:
-            return "manual"
-        cycle_settings = self.config.get("cycle_settings", {})
-        expected = {
-            "anchor_date": default_anchor,
-            "cycle_length": self.config.get("default_cycle_length", 28),
-            "period_length": self.config.get("default_period_length", 5),
-            "ovulation_day": cycle_settings.get("ovulation_day", 14),
-            "ovulation_window": cycle_settings.get("ovulation_window", 3),
-            "enabled": self.config.get("default_enabled", False),
-        }
-        for key in expected:
-            if cfg.get(key) != expected[key]:
-                return "manual"
-        return "global_default"
+        if cfg.get("source") == "global_default":
+            return "global_default"
+        return "manual"
 
     def _serialize_session(self, umo: str, cfg: dict) -> dict | None:
         """Build session dict with live phase calculation."""
@@ -186,6 +173,30 @@ class PeriodPlugin(Star):
             "phase_label": phase_labels.get(info.phase, info.phase),
         }
 
+    def _build_global_default_config(self, stored: dict | None = None) -> dict | None:
+        """构建跟随全局默认值的会话配置。"""
+        stored = stored or {}
+        anchor_overridden = stored.get("anchor_overridden", False)
+        if anchor_overridden:
+            anchor = stored.get("anchor_date", "")
+        else:
+            anchor = self.config.get("default_anchor_date", "")
+        if not anchor:
+            return None
+
+        cycle_settings = self.config.get("cycle_settings", {})
+        return {
+            "source": "global_default",
+            "anchor_overridden": anchor_overridden,
+            "anchor_date": anchor,
+            "cycle_length": self.config.get("default_cycle_length", 28),
+            "period_length": self.config.get("default_period_length", 5),
+            "ovulation_day": cycle_settings.get("ovulation_day", 14),
+            "ovulation_window": cycle_settings.get("ovulation_window", 3),
+            "enabled": stored.get("enabled", self.config.get("default_enabled", False)),
+            "advance_days": stored.get("advance_days", 0),
+        }
+
     async def _webapi_list_sessions(self):
         """GET /astrbot_plugin_period/sessions"""
         all_data = await self.store.get_all()
@@ -193,6 +204,8 @@ class PeriodPlugin(Star):
         sessions = []
         # 1) Explicitly configured sessions (from persistent store)
         for umo, cfg in all_data.items():
+            if cfg.get("source") == "global_default":
+                cfg = await self._get_session_config(umo)
             serialized = self._serialize_session(umo, cfg)
             if serialized:
                 sessions.append(serialized)
@@ -241,7 +254,7 @@ class PeriodPlugin(Star):
             await self.store.set(umo, cfg)
 
         await self.store.toggle(umo)
-        cfg = await self.store.get(umo)
+        cfg = await self._get_session_config(umo)
         return jsonify({"status": "ok", "data": self._serialize_session(umo, cfg)})
 
     async def _webapi_advance_session(self, umo: str):
@@ -263,6 +276,7 @@ class PeriodPlugin(Star):
         cfg = await self.store.get(umo)
         cfg["advance_days"] = cfg.get("advance_days", 0) + days
         await self.store.set(umo, cfg)
+        cfg = await self._get_session_config(umo)
 
         return jsonify({"status": "ok", "data": self._serialize_session(umo, cfg)})
 
@@ -293,7 +307,10 @@ class PeriodPlugin(Star):
         cfg = await self.store.get(umo)
         cfg["anchor_date"] = date_str
         cfg["advance_days"] = 0
+        if cfg.get("source") == "global_default":
+            cfg["anchor_overridden"] = True
         await self.store.set(umo, cfg)
+        cfg = await self._get_session_config(umo)
 
         self._anchored_sessions.discard(umo)
         self._inject_counters.pop(umo, None)
@@ -320,27 +337,14 @@ class PeriodPlugin(Star):
         """Get session config, falling back to global defaults if available."""
         cfg = await self.store.get(umo)
         if cfg and "anchor_date" in cfg:
+            if cfg.get("source") == "global_default":
+                return self._build_global_default_config(cfg)
             return cfg
 
-        # No session-specific config, check global defaults
-        anchor = self.config.get("default_anchor_date", "")
-        if not anchor:
-            return None
-
-        # Build config from global defaults.
         # enabled reflects default_enabled so that on_llm_request won't inject
         # unless the admin explicitly opted in, but commands (status/toggle)
         # can still see and manipulate the session config.
-        cycle_settings = self.config.get("cycle_settings", {})
-        return {
-            "anchor_date": anchor,
-            "cycle_length": self.config.get("default_cycle_length", 28),
-            "period_length": self.config.get("default_period_length", 5),
-            "ovulation_day": cycle_settings.get("ovulation_day", 14),
-            "ovulation_window": cycle_settings.get("ovulation_window", 3),
-            "enabled": self.config.get("default_enabled", False),
-            "advance_days": 0,
-        }
+        return self._build_global_default_config()
 
     async def _get_status_text(self, umo: str) -> str:
         """Generate human-readable status text for a session."""
@@ -505,8 +509,8 @@ class PeriodPlugin(Star):
         self,
         event: AstrMessageEvent,
         date_str: str,
-        cycle_len: int = 28,
-        period_len: int = 5,
+        cycle_len: int = None,
+        period_len: int = None,
     ):
         """设置周期参数 /period set 2026-05-01 [28] [5]"""
         allowed, msg = self._check_command_permission("set")
@@ -520,6 +524,25 @@ class PeriodPlugin(Star):
             datetime.datetime.strptime(date_str, "%Y-%m-%d")
         except ValueError:
             yield event.plain_result("日期格式错误，请使用YYYYMMDD格式，例如2026-05-01")
+            return
+
+        try:
+            cycle_len = (
+                self.config.get("default_cycle_length", 28)
+                if cycle_len is None
+                else int(cycle_len)
+            )
+        except (TypeError, ValueError):
+            yield event.plain_result("周期长度应在21至35天之间")
+            return
+        try:
+            period_len = (
+                self.config.get("default_period_length", 5)
+                if period_len is None
+                else int(period_len)
+            )
+        except (TypeError, ValueError):
+            yield event.plain_result("经期长度应在2至10天之间")
             return
 
         # Validate parameters
@@ -536,6 +559,7 @@ class PeriodPlugin(Star):
         ovulation_window = cycle_settings.get("ovulation_window", 3)
 
         data = {
+            "source": "manual",
             "anchor_date": date_str,
             "cycle_length": cycle_len,
             "period_length": period_len,

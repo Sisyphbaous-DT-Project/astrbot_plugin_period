@@ -9,6 +9,7 @@ if str(_parent) not in sys.path:
     sys.path.insert(0, str(_parent))
 
 import pytest
+from freezegun import freeze_time
 from quart import request
 
 from astrbot_plugin_period.main import PeriodPlugin
@@ -31,6 +32,14 @@ def _unwrap(result):
     if isinstance(result, tuple):
         return result[0], result[1] if len(result) > 1 else 200
     return result, 200
+
+
+async def _collect_async_gen(generator):
+    """收集异步生成器产出的所有结果。"""
+    items = []
+    async for item in generator:
+        items.append(item)
+    return items
 
 
 # --------------------------------------------------------------------------- #
@@ -82,6 +91,152 @@ async def test_webapi_list_sessions_skips_invalid(webui_plugin):
     result, status = _unwrap(await webui_plugin._webapi_list_sessions())
     assert status == 200
     assert result["data"]["count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_global_default_session_uses_live_period_length(webui_plugin):
+    """全局默认会话应跟随后续 default_period_length 变化。"""
+    umo = "test:platform:default-user"
+    webui_plugin.config["default_anchor_date"] = "2026-05-25"
+    webui_plugin.config["default_enabled"] = True
+    webui_plugin.config["default_cycle_length"] = 28
+    webui_plugin.config["default_period_length"] = 5
+
+    cfg = await webui_plugin._get_session_config(umo)
+    await webui_plugin.store.set(umo, cfg)
+
+    with freeze_time("2026-05-29"):
+        before = webui_plugin._serialize_session(umo, await webui_plugin._get_session_config(umo))
+    assert before["source"] == "global_default"
+    assert before["period_length"] == 5
+    assert before["phase"] == "menstrual"
+    assert before["phase_day"] == 5
+
+    webui_plugin.config["default_period_length"] = 3
+
+    with freeze_time("2026-05-29"):
+        after = webui_plugin._serialize_session(
+            umo,
+            await webui_plugin._get_session_config(umo),
+        )
+    assert after["source"] == "global_default"
+    assert after["period_length"] == 3
+    assert after["phase"] == "follicular"
+    assert after["phase_day"] == 2
+
+
+@pytest.mark.asyncio
+async def test_global_default_session_uses_live_cycle_settings(webui_plugin):
+    """全局默认会话应跟随后续周期计算参数变化。"""
+    umo = "test:platform:default-user"
+    webui_plugin.config["default_anchor_date"] = "2026-05-25"
+    webui_plugin.config["default_enabled"] = True
+    webui_plugin.config["default_cycle_length"] = 28
+    webui_plugin.config["default_period_length"] = 5
+    webui_plugin.config["cycle_settings"]["ovulation_day"] = 14
+    webui_plugin.config["cycle_settings"]["ovulation_window"] = 3
+
+    await webui_plugin.store.set(umo, await webui_plugin._get_session_config(umo))
+    webui_plugin.config["default_cycle_length"] = 30
+    webui_plugin.config["cycle_settings"]["ovulation_day"] = 16
+    webui_plugin.config["cycle_settings"]["ovulation_window"] = 5
+
+    cfg = await webui_plugin._get_session_config(umo)
+
+    assert cfg["cycle_length"] == 30
+    assert cfg["ovulation_day"] == 16
+    assert cfg["ovulation_window"] == 5
+
+
+@pytest.mark.asyncio
+async def test_manual_session_keeps_own_period_length(webui_plugin):
+    """手动会话不应跟随全局默认经期长度变化。"""
+    umo = "test:platform:manual-user"
+    await webui_plugin.store.set(umo, {
+        "anchor_date": "2026-05-25",
+        "cycle_length": 28,
+        "period_length": 5,
+        "ovulation_day": 14,
+        "ovulation_window": 3,
+        "enabled": True,
+        "advance_days": 0,
+    })
+    webui_plugin.config["default_period_length"] = 3
+
+    cfg = await webui_plugin._get_session_config(umo)
+
+    assert cfg["period_length"] == 5
+    assert webui_plugin._infer_source(cfg) == "manual"
+
+
+@pytest.mark.asyncio
+async def test_webapi_list_sessions_merges_global_default_source(webui_plugin):
+    """WebUI 列表应展示全局默认会话的最新默认值。"""
+    umo = "test:platform:default-user"
+    webui_plugin.config["default_anchor_date"] = "2026-05-25"
+    webui_plugin.config["default_enabled"] = True
+    webui_plugin.config["default_cycle_length"] = 28
+    webui_plugin.config["default_period_length"] = 3
+    await webui_plugin.store.set(umo, {
+        "source": "global_default",
+        "anchor_date": "2026-05-25",
+        "cycle_length": 28,
+        "period_length": 5,
+        "ovulation_day": 14,
+        "ovulation_window": 3,
+        "enabled": True,
+        "advance_days": 0,
+    })
+
+    with freeze_time("2026-05-29"):
+        result, status = _unwrap(await webui_plugin._webapi_list_sessions())
+
+    assert status == 200
+    session = result["data"]["sessions"][0]
+    assert session["source"] == "global_default"
+    assert session["period_length"] == 3
+    assert session["phase"] == "follicular"
+    assert session["phase_day"] == 2
+
+
+@pytest.mark.asyncio
+async def test_global_default_session_uses_live_anchor_until_overridden(webui_plugin):
+    """未手动改锚点的全局默认会话应跟随默认锚点变化。"""
+    umo = "test:platform:default-user"
+    webui_plugin.config["default_anchor_date"] = "2026-05-25"
+    webui_plugin.config["default_enabled"] = True
+
+    cfg = await webui_plugin._get_session_config(umo)
+    await webui_plugin.store.set(umo, cfg)
+    webui_plugin.config["default_anchor_date"] = "2026-06-01"
+
+    cfg = await webui_plugin._get_session_config(umo)
+
+    assert cfg["source"] == "global_default"
+    assert cfg["anchor_overridden"] is False
+    assert cfg["anchor_date"] == "2026-06-01"
+
+
+@pytest.mark.asyncio
+async def test_global_default_anchor_override_keeps_live_period_length(webui_plugin):
+    """手动改过锚点后，其他全局默认参数仍应保持动态。"""
+    umo = "test:platform:default-user"
+    webui_plugin.config["default_anchor_date"] = "2026-05-25"
+    webui_plugin.config["default_enabled"] = True
+    webui_plugin.config["default_period_length"] = 5
+    await webui_plugin.store.set(umo, await webui_plugin._get_session_config(umo))
+
+    request.set_json({"date": "2026-06-01"})
+    await webui_plugin._webapi_set_anchor(umo)
+    webui_plugin.config["default_anchor_date"] = "2026-07-01"
+    webui_plugin.config["default_period_length"] = 3
+
+    cfg = await webui_plugin._get_session_config(umo)
+
+    assert cfg["source"] == "global_default"
+    assert cfg["anchor_overridden"] is True
+    assert cfg["anchor_date"] == "2026-06-01"
+    assert cfg["period_length"] == 3
 
 
 # --------------------------------------------------------------------------- #
@@ -380,3 +535,49 @@ def test_webapi_routes_registered(webui_plugin):
     assert f"{base}/sessions/<umo>/advance" in routes
     assert f"{base}/sessions/<umo>/anchor" in routes
     assert f"{base}/sessions/<umo>/delete" in routes
+
+
+# --------------------------------------------------------------------------- #
+#  命令
+# --------------------------------------------------------------------------- #
+
+@pytest.mark.asyncio
+async def test_period_set_uses_global_default_lengths(webui_plugin, mock_event):
+    """省略可选长度时应使用当前全局默认值。"""
+    webui_plugin.config["default_cycle_length"] = 30
+    webui_plugin.config["default_period_length"] = 3
+
+    await _collect_async_gen(
+        webui_plugin.period_set(mock_event, "2026-05-25")
+    )
+    stored = await webui_plugin.store.get(mock_event.unified_msg_origin)
+
+    assert stored["source"] == "manual"
+    assert stored["cycle_length"] == 30
+    assert stored["period_length"] == 3
+
+
+@pytest.mark.asyncio
+async def test_period_set_explicit_lengths_are_manual(webui_plugin, mock_event):
+    """显式传入的命令长度应保存为手动独立配置。"""
+    webui_plugin.config["default_period_length"] = 3
+
+    await _collect_async_gen(
+        webui_plugin.period_set(mock_event, "2026-05-25", 28, 5)
+    )
+    stored = await webui_plugin.store.get(mock_event.unified_msg_origin)
+
+    assert stored["source"] == "manual"
+    assert stored["cycle_length"] == 28
+    assert stored["period_length"] == 5
+
+
+@pytest.mark.asyncio
+async def test_period_set_rejects_non_integer_lengths(webui_plugin, mock_event):
+    """无效可选长度应返回友好的校验结果。"""
+    await _collect_async_gen(
+        webui_plugin.period_set(mock_event, "2026-05-25", "abc", 5)
+    )
+
+    mock_event.plain_result.assert_called_with("周期长度应在21至35天之间")
+    assert await webui_plugin.store.get(mock_event.unified_msg_origin) is None
