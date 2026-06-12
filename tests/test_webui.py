@@ -170,6 +170,253 @@ async def test_manual_session_keeps_own_period_length(webui_plugin):
 
 
 @pytest.mark.asyncio
+async def test_legacy_global_default_session_uses_live_period_length(webui_plugin):
+    """旧版未标记来源的全局默认记录也应跟随经期长度变化。"""
+    umo = "test:platform:legacy-default-user"
+    webui_plugin.config["default_anchor_date"] = "2026-02-17"
+    webui_plugin.config["default_enabled"] = True
+    webui_plugin.config["default_cycle_length"] = 28
+    webui_plugin.config["default_period_length"] = 3
+    webui_plugin.config["cycle_settings"]["ovulation_day"] = 14
+    webui_plugin.config["cycle_settings"]["ovulation_window"] = 3
+    await webui_plugin.store.set(umo, {
+        "anchor_date": "2026-02-17",
+        "cycle_length": 28,
+        "period_length": 5,
+        "ovulation_day": 14,
+        "ovulation_window": 3,
+        "enabled": True,
+        "advance_days": 0,
+    })
+
+    cfg = await webui_plugin._get_session_config(umo)
+    stored = await webui_plugin.store.get(umo)
+    with freeze_time("2026-06-13"):
+        session = webui_plugin._serialize_session(umo, cfg)
+
+    assert cfg["source"] == "global_default"
+    assert cfg["period_length"] == 3
+    assert stored["source"] == "global_default"
+    assert stored["period_length"] == 3
+    assert session["source"] == "global_default"
+    assert session["phase"] == "follicular"
+    assert session["phase_day"] == 2
+    assert session["total_day"] == 5
+
+
+@pytest.mark.asyncio
+async def test_period_status_migrates_legacy_default_session(webui_plugin, mock_event):
+    """period status 应修复并使用旧版全局默认记录的当前经期长度。"""
+    umo = mock_event.unified_msg_origin
+    webui_plugin.config["default_anchor_date"] = "2026-02-17"
+    webui_plugin.config["default_enabled"] = True
+    webui_plugin.config["default_cycle_length"] = 28
+    webui_plugin.config["default_period_length"] = 3
+    webui_plugin.config["cycle_settings"]["ovulation_day"] = 14
+    webui_plugin.config["cycle_settings"]["ovulation_window"] = 3
+    await webui_plugin.store.set(umo, {
+        "anchor_date": "2026-02-17",
+        "cycle_length": 28,
+        "period_length": 5,
+        "ovulation_day": 14,
+        "ovulation_window": 3,
+        "enabled": True,
+        "advance_days": 0,
+    })
+
+    with freeze_time("2026-06-13"):
+        await _collect_async_gen(webui_plugin.period_status(mock_event))
+    stored = await webui_plugin.store.get(umo)
+
+    mock_event.plain_result.assert_called_once()
+    status_text = mock_event.plain_result.call_args.args[0]
+    assert "当前生理状态卵泡期" in status_text
+    assert "阶段第2天周期第5天" in status_text
+    assert stored["source"] == "global_default"
+    assert stored["period_length"] == 3
+
+
+@pytest.mark.asyncio
+async def test_legacy_manual_session_with_custom_period_length_stays_manual(webui_plugin):
+    """旧版无来源记录有独立经期长度时，应继续视为手动会话。"""
+    umo = "test:platform:legacy-manual-custom-period-user"
+    webui_plugin.config["default_anchor_date"] = "2026-02-17"
+    webui_plugin.config["default_enabled"] = True
+    webui_plugin.config["default_cycle_length"] = 28
+    webui_plugin.config["default_period_length"] = 3
+    webui_plugin.config["cycle_settings"]["ovulation_day"] = 14
+    webui_plugin.config["cycle_settings"]["ovulation_window"] = 3
+    await webui_plugin.store.set(umo, {
+        "anchor_date": "2026-02-17",
+        "cycle_length": 28,
+        "period_length": 6,
+        "ovulation_day": 14,
+        "ovulation_window": 3,
+        "enabled": True,
+        "advance_days": 0,
+    })
+
+    cfg = await webui_plugin._get_session_config(umo)
+    stored = await webui_plugin.store.get(umo)
+
+    assert cfg.get("source") is None
+    assert stored.get("source") is None
+    assert webui_plugin._infer_source(cfg) == "manual"
+    assert cfg["period_length"] == 6
+
+
+@pytest.mark.asyncio
+async def test_legacy_manual_session_with_custom_anchor_stays_manual(webui_plugin):
+    """旧版无来源记录改过锚点时，应继续视为手动会话。"""
+    umo = "test:platform:legacy-manual-user"
+    webui_plugin.config["default_anchor_date"] = "2026-02-17"
+    webui_plugin.config["default_enabled"] = True
+    webui_plugin.config["default_period_length"] = 3
+    await webui_plugin.store.set(umo, {
+        "anchor_date": "2026-02-18",
+        "cycle_length": 28,
+        "period_length": 5,
+        "ovulation_day": 14,
+        "ovulation_window": 3,
+        "enabled": True,
+        "advance_days": 0,
+    })
+
+    cfg = await webui_plugin._get_session_config(umo)
+
+    assert cfg.get("source") is None
+    assert webui_plugin._infer_source(cfg) == "manual"
+    assert cfg["period_length"] == 5
+
+
+@pytest.mark.asyncio
+async def test_legacy_global_default_with_changed_cycle_length_stays_manual(webui_plugin):
+    """旧版无来源记录周期长度不匹配时，不应猜测迁移。"""
+    umo = "test:platform:legacy-changed-cycle-user"
+    webui_plugin.config["default_anchor_date"] = "2026-02-17"
+    webui_plugin.config["default_enabled"] = True
+    webui_plugin.config["default_cycle_length"] = 30
+    webui_plugin.config["default_period_length"] = 3
+    webui_plugin.config["cycle_settings"]["ovulation_day"] = 14
+    webui_plugin.config["cycle_settings"]["ovulation_window"] = 3
+    await webui_plugin.store.set(umo, {
+        "anchor_date": "2026-02-17",
+        "cycle_length": 28,
+        "period_length": 5,
+        "ovulation_day": 14,
+        "ovulation_window": 3,
+        "enabled": True,
+        "advance_days": 0,
+    })
+
+    cfg = await webui_plugin._get_session_config(umo)
+    stored = await webui_plugin.store.get(umo)
+
+    assert cfg.get("source") is None
+    assert stored.get("source") is None
+    assert webui_plugin._infer_source(cfg) == "manual"
+    assert cfg["cycle_length"] == 28
+    assert cfg["period_length"] == 5
+
+
+@pytest.mark.asyncio
+async def test_webapi_set_anchor_migrates_legacy_default_and_keeps_live_period_length(webui_plugin):
+    """旧版全局默认记录改锚点后，仍应跟随后续默认经期长度变化。"""
+    umo = "test:platform:legacy-default-anchor-user"
+    webui_plugin.config["default_anchor_date"] = "2026-02-17"
+    webui_plugin.config["default_enabled"] = True
+    webui_plugin.config["default_cycle_length"] = 28
+    webui_plugin.config["default_period_length"] = 3
+    webui_plugin.config["cycle_settings"]["ovulation_day"] = 14
+    webui_plugin.config["cycle_settings"]["ovulation_window"] = 3
+    await webui_plugin.store.set(umo, {
+        "anchor_date": "2026-02-17",
+        "cycle_length": 28,
+        "period_length": 5,
+        "ovulation_day": 14,
+        "ovulation_window": 3,
+        "enabled": True,
+        "advance_days": 4,
+    })
+
+    request.set_json({"date": "2026-03-01"})
+    result, status = _unwrap(await webui_plugin._webapi_set_anchor(umo))
+    stored = await webui_plugin.store.get(umo)
+
+    assert status == 200
+    assert result["data"]["source"] == "global_default"
+    assert result["data"]["anchor_date"] == "2026-03-01"
+    assert result["data"]["period_length"] == 3
+    assert result["data"]["advance_days"] == 0
+    assert stored["source"] == "global_default"
+    assert stored["anchor_overridden"] is True
+    assert stored["anchor_date"] == "2026-03-01"
+
+    webui_plugin.config["default_anchor_date"] = "2026-04-01"
+    webui_plugin.config["default_period_length"] = 4
+    cfg = await webui_plugin._get_session_config(umo)
+
+    assert cfg["source"] == "global_default"
+    assert cfg["anchor_overridden"] is True
+    assert cfg["anchor_date"] == "2026-03-01"
+    assert cfg["period_length"] == 4
+
+
+@pytest.mark.asyncio
+async def test_webapi_list_sessions_merges_legacy_global_default(webui_plugin):
+    """WebUI 列表也应合并旧版全局默认记录。"""
+    umo = "test:platform:legacy-default-user"
+    webui_plugin.config["default_anchor_date"] = "2026-02-17"
+    webui_plugin.config["default_enabled"] = True
+    webui_plugin.config["default_cycle_length"] = 28
+    webui_plugin.config["default_period_length"] = 3
+    await webui_plugin.store.set(umo, {
+        "anchor_date": "2026-02-17",
+        "cycle_length": 28,
+        "period_length": 5,
+        "ovulation_day": 14,
+        "ovulation_window": 3,
+        "enabled": True,
+        "advance_days": 0,
+    })
+
+    with freeze_time("2026-06-13"):
+        result, status = _unwrap(await webui_plugin._webapi_list_sessions())
+
+    assert status == 200
+    session = result["data"]["sessions"][0]
+    assert session["source"] == "global_default"
+    assert session["period_length"] == 3
+    assert session["phase"] == "follicular"
+    assert session["phase_day"] == 2
+
+
+@pytest.mark.asyncio
+async def test_legacy_global_default_preserves_enabled_state(webui_plugin):
+    """旧版全局默认记录应保留自己的开关状态。"""
+    umo = "test:platform:legacy-default-disabled-user"
+    webui_plugin.config["default_anchor_date"] = "2026-02-17"
+    webui_plugin.config["default_enabled"] = True
+    webui_plugin.config["default_cycle_length"] = 28
+    webui_plugin.config["default_period_length"] = 3
+    await webui_plugin.store.set(umo, {
+        "anchor_date": "2026-02-17",
+        "cycle_length": 28,
+        "period_length": 5,
+        "ovulation_day": 14,
+        "ovulation_window": 3,
+        "enabled": False,
+        "advance_days": 0,
+    })
+
+    cfg = await webui_plugin._get_session_config(umo)
+
+    assert cfg["source"] == "global_default"
+    assert cfg["period_length"] == 3
+    assert cfg["enabled"] is False
+
+
+@pytest.mark.asyncio
 async def test_webapi_list_sessions_merges_global_default_source(webui_plugin):
     """WebUI 列表应展示全局默认会话的最新默认值。"""
     umo = "test:platform:default-user"

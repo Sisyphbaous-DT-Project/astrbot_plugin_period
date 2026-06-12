@@ -197,6 +197,44 @@ class PeriodPlugin(Star):
             "advance_days": stored.get("advance_days", 0),
         }
 
+    def _is_legacy_global_default_config(self, cfg: dict) -> bool:
+        """判断旧版未标记来源的记录是否可安全视为全局默认会话。"""
+        if cfg.get("source") or not cfg.get("anchor_date"):
+            return False
+
+        # 旧版本没有 source 字段，且最常见的遗留值是内置经期长度 5 天。
+        # 若用户手动设置过其他经期长度，则继续按手动会话处理，避免误伤。
+        # 完全同形的旧手动记录无法可靠区分；这里仅兼容默认经期已改动的旧默认会话。
+        historical_period_length = 5
+        if cfg.get("period_length") != historical_period_length:
+            return False
+        if self.config.get("default_period_length", 5) == historical_period_length:
+            return False
+
+        default_anchor = self.config.get("default_anchor_date", "")
+        if not default_anchor or cfg.get("anchor_date") != default_anchor:
+            return False
+
+        cycle_settings = self.config.get("cycle_settings", {})
+        expected = {
+            "cycle_length": self.config.get("default_cycle_length", 28),
+            "ovulation_day": cycle_settings.get("ovulation_day", 14),
+            "ovulation_window": cycle_settings.get("ovulation_window", 3),
+        }
+        return all(cfg.get(key) == value for key, value in expected.items())
+
+    async def _migrate_legacy_global_default_config(
+        self,
+        umo: str,
+        cfg: dict,
+    ) -> dict | None:
+        """将可识别的旧版全局默认记录迁移为显式来源记录。"""
+        migrated = self._build_global_default_config(cfg)
+        if migrated:
+            await self.store.set(umo, migrated)
+            logger.info(f"[PeriodPlugin] 迁移旧版全局默认会话记录: {umo}")
+        return migrated
+
     async def _webapi_list_sessions(self):
         """GET /astrbot_plugin_period/sessions"""
         all_data = await self.store.get_all()
@@ -204,7 +242,9 @@ class PeriodPlugin(Star):
         sessions = []
         # 1) Explicitly configured sessions (from persistent store)
         for umo, cfg in all_data.items():
-            if cfg.get("source") == "global_default":
+            if cfg.get("source") == "global_default" or (
+                self._is_legacy_global_default_config(cfg)
+            ):
                 cfg = await self._get_session_config(umo)
             serialized = self._serialize_session(umo, cfg)
             if serialized:
@@ -339,6 +379,8 @@ class PeriodPlugin(Star):
         if cfg and "anchor_date" in cfg:
             if cfg.get("source") == "global_default":
                 return self._build_global_default_config(cfg)
+            if self._is_legacy_global_default_config(cfg):
+                return await self._migrate_legacy_global_default_config(umo, cfg)
             return cfg
 
         # enabled reflects default_enabled so that on_llm_request won't inject
