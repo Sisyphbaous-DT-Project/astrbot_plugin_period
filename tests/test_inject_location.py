@@ -59,14 +59,24 @@ class TestInjectLocation:
         }
 
     @pytest.mark.asyncio
-    async def test_default_user_message_before(self, plugin, mock_event, mock_req, valid_cfg):
-        """Default inject_location prepends dynamic state to user message."""
+    async def test_default_extra_user_content_parts(self, plugin, mock_event, mock_req, valid_cfg):
+        """Default inject_location appends dynamic state to extra_user_content_parts."""
+        plugin._get_session_config = AsyncMock(return_value=valid_cfg)
+        await plugin.on_llm_request(mock_event, mock_req)
+        assert mock_req.prompt == "用户原始消息"
+        assert len(mock_req.extra_user_content_parts) == 1
+        assert "[当前生理状态]" in mock_req.extra_user_content_parts[0].text
+        # Anchor should be in system_prompt
+        assert "[身体感知系统]" in mock_req.system_prompt
+
+    @pytest.mark.asyncio
+    async def test_user_message_before(self, plugin, mock_event, mock_req, valid_cfg):
+        """user_message_before prepends dynamic state to user message."""
+        plugin.config["inject_location"] = "user_message_before"
         plugin._get_session_config = AsyncMock(return_value=valid_cfg)
         await plugin.on_llm_request(mock_event, mock_req)
         assert mock_req.prompt.startswith("[当前生理状态]")
         assert "用户原始消息" in mock_req.prompt
-        # Anchor should be in system_prompt
-        assert "[身体感知系统]" in mock_req.system_prompt
 
     @pytest.mark.asyncio
     async def test_system_prompt_append(self, plugin, mock_event, mock_req, valid_cfg):

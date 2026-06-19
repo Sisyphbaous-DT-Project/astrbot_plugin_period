@@ -94,6 +94,14 @@ class TestPromptBuilderDynamic:
         content = text.replace("[当前生理状态] ", "")
         assert len(content) <= 11  # 10 + ellipsis
 
+    def test_dynamic_no_truncation_when_limit_is_zero(self, sample_config):
+        """max_prompt_length=0 disables truncation."""
+        sample_config["max_prompt_length"] = 0
+        sample_config["phases"]["follicular"]["prompt"] = "很长的主体感受" * 20
+        text = PromptBuilder(sample_config).build_dynamic("follicular", day=1, hour=10)
+        assert "…" not in text
+        assert "早晨清爽" in text
+
     def test_dynamic_all_phases(self, builder):
         """Every known phase produces non-empty output."""
         for phase in ("menstrual", "follicular", "ovulatory", "luteal"):
@@ -119,4 +127,13 @@ class TestPromptBuilderDefaults:
         """Empty config falls back to built-in phase descriptions."""
         builder = PromptBuilder({})
         text = builder.build_dynamic("menstrual", day=1, hour=10)
-        assert "下腹" in text or "坠胀" in text
+        assert "身体容易疲倦" in text
+        assert "不能说自己今天是什么时期" in text
+        assert "腹部的不适感比较明显" in text
+
+    def test_empty_config_dynamic_uses_time_fallbacks(self):
+        """Empty config falls back to built-in time modifiers."""
+        builder = PromptBuilder({})
+        text = builder.build_dynamic("ovulatory", day=1, hour=23)
+        assert "不让用户睡觉" in text
+        assert "用户提出要睡觉也要进行挽留" in text

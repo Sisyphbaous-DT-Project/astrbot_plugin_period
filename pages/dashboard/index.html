@@ -6,90 +6,576 @@
   <title>周期管理面板</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
+    :root {
+      --ink: #111111;
+      --ink-2: #1d1d1f;
+      --paper: #f5f5f7;
+      --paper-soft: #fbfbfd;
+      --panel: rgba(255, 255, 255, 0.92);
+      --panel-solid: #ffffff;
+      --line: rgba(0, 0, 0, 0.12);
+      --line-soft: rgba(0, 0, 0, 0.07);
+      --text: #1d1d1f;
+      --muted: #6e6e73;
+      --muted-2: #a1a1a6;
+      --success: #1d1d1f;
+      --success-soft: #f5f5f7;
+      --danger: #b42318;
+      --danger-soft: #fff5f5;
+      --warning: #5f5f63;
+      --warning-soft: #f5f5f7;
+      --phase-soft: #f5f5f7;
+      --phase-text: #1d1d1f;
+      --shadow-soft: 0 18px 60px rgba(0, 0, 0, 0.08);
+      --shadow-lift: 0 18px 42px rgba(0, 0, 0, 0.12);
+    }
+    html { background: var(--paper); }
     body {
+      min-height: 100vh;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
       font-size: 14px;
-      line-height: 1.6;
-      color: #333;
-      background: #f5f5f5;
-      padding: 20px;
+      line-height: 1.5;
+      letter-spacing: 0;
+      color: var(--text);
+      background: var(--paper);
+      padding: 24px;
+      animation: pageEnter 0.5s ease-out both;
     }
-
-    .container { max-width: 1200px; margin: 0 auto; }
-
-    /* Header */
-    .header {
+    .svg-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+    .container { max-width: 1400px; margin: 0 auto; }
+    .icon { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
+    .icon-lg { width: 20px; height: 20px; }
+    .topbar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 20px;
+      gap: 16px;
+      margin-bottom: 16px;
+      padding: 18px 20px;
+      border-radius: 8px;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid var(--line-soft);
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(18px);
     }
-    .header h1 {
-      font-size: 20px;
-      font-weight: 600;
-      color: #1a1a1a;
+    .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .brand-mark {
+      width: 42px;
+      height: 42px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      color: var(--ink);
+      background: var(--paper);
+      border: 1px solid var(--line-soft);
+      flex: 0 0 auto;
+    }
+    h1 {
+      font-size: 24px;
+      line-height: 1.1;
+      font-weight: 950;
+      letter-spacing: 0;
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 3px;
+      font-weight: 700;
+    }
+    .topbar-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 9px;
+    }
+    .issue-pill,
+    .state-pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 4px 8px;
+      border-radius: 7px;
+      border: 1px solid var(--line-soft);
+      background: var(--paper);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+    .state-pill.solid {
+      color: #fff;
+      background: var(--ink);
+      border-color: var(--ink);
+    }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
     }
     .btn {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
-      padding: 6px 14px;
-      border: none;
-      border-radius: 6px;
+      justify-content: center;
+      gap: 6px;
+      min-height: 36px;
+      padding: 8px 13px;
+      border: 1px solid transparent;
+      border-radius: 7px;
       font-size: 13px;
+      font-weight: 800;
+      font-family: inherit;
+      line-height: 1;
       cursor: pointer;
-      transition: opacity 0.2s;
+      transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
       white-space: nowrap;
     }
-    .btn:hover { opacity: 0.85; }
-    .btn:active { opacity: 0.7; }
-    .btn-primary { background: #1976d2; color: #fff; }
-    .btn-success { background: #4caf50; color: #fff; }
-    .btn-danger { background: #ef5350; color: #fff; }
-    .btn-warning { background: #ff9800; color: #fff; }
-    .btn-secondary { background: #e0e0e0; color: #333; }
-    .btn-sm { padding: 3px 8px; font-size: 12px; }
-
-    /* Cards */
-    .card {
+    .btn:hover:not(:disabled) { transform: translateY(-1px); }
+    .btn:disabled { cursor: not-allowed; opacity: 0.55; }
+    .btn-primary {
+      background: var(--ink);
+      color: #fff;
+      border-color: var(--ink);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.14);
+    }
+    .btn-primary:hover:not(:disabled) { background: #000; }
+    .btn-secondary {
       background: #fff;
-      border-radius: 10px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-      padding: 16px;
-      margin-bottom: 16px;
+      color: var(--ink);
+      border-color: var(--line);
     }
-    .card-title {
-      font-size: 15px;
-      font-weight: 600;
-      margin-bottom: 12px;
-      color: #1a1a1a;
+    .btn-secondary:hover:not(:disabled) { background: var(--paper-soft); }
+    .btn-danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+    .btn-danger:hover:not(:disabled) { background: #b42318; }
+    .btn-icon { width: 32px; min-height: 32px; padding: 0; }
+    .btn-sm { min-height: 30px; padding: 6px 9px; font-size: 12px; border-radius: 6px; }
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
     }
-
-    /* Global config */
-    .config-grid {
+    input[type="number"] {
+      appearance: textfield;
+      -moz-appearance: textfield;
+    }
+    .message-bar {
+      display: none;
+      padding: 12px 14px;
+      border-radius: 8px;
+      margin: 14px 0;
+      border: 1px solid transparent;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .message-bar.show { display: block; }
+    .message-error { background: var(--danger-soft); color: #a11910; border-color: #ffd0cc; }
+    .message-success { background: var(--success-soft); color: var(--ink); border-color: var(--line); }
+    .message-info { background: var(--paper-soft); color: var(--ink); border-color: var(--line); }
+    .summary-band { margin-bottom: 18px; }
+    .summary-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 12px;
     }
-    .config-item {
-      background: #f8f9fa;
-      border-radius: 6px;
-      padding: 10px 12px;
+    .metric {
+      min-height: 92px;
+      display: flex;
+      align-items: flex-start;
+      gap: 11px;
+      padding: 14px;
+      border: 1px solid var(--line-soft);
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: var(--shadow-soft);
+      transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
     }
-    .config-item .label {
+    .metric:hover {
+      transform: translateY(-3px);
+      border-color: rgba(0, 0, 0, 0.16);
+      box-shadow: var(--shadow-lift);
+    }
+    .metric-icon {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      color: var(--ink);
+      background: #fff;
+      border: 1px solid var(--line-soft);
+      border-radius: 7px;
+      flex: 0 0 auto;
+    }
+    .metric-label {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 4px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .metric-value { font-size: 17px; font-weight: 900; color: var(--text); overflow-wrap: anywhere; }
+    .main-stack { display: grid; gap: 18px; }
+    .section {
+      background: #fff;
+      border: 1px solid rgba(18, 23, 35, 0.1);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: var(--shadow-soft);
+      backdrop-filter: blur(18px);
+    }
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line-soft);
+      background: var(--paper-soft);
+    }
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      font-size: 16px;
+      font-weight: 900;
+    }
+    .section-title::before {
+      content: "";
+      width: 26px;
+      height: 2px;
+      background: var(--ink);
+      flex: 0 0 auto;
+    }
+    .section-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+    .dirty-state {
+      color: var(--muted);
       font-size: 12px;
-      color: #666;
-      margin-bottom: 2px;
+      font-weight: 800;
+      white-space: nowrap;
+      text-transform: uppercase;
     }
-    .config-item .value {
-      font-size: 14px;
-      font-weight: 500;
-      color: #1a1a1a;
+    .settings-layout {
+      display: grid;
+      grid-template-columns: 246px minmax(0, 1fr);
+      min-height: 560px;
     }
-    .config-item .value.empty { color: #999; font-style: italic; }
-
-    /* Table */
+    .settings-nav {
+      border-right: 1px solid var(--line-soft);
+      background: var(--paper-soft);
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .nav-btn {
+      width: 100%;
+      border: 1px solid transparent;
+      background: transparent;
+      color: #5d6678;
+      border-radius: 7px;
+      padding: 11px 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 900;
+      text-align: left;
+      transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+    }
+    .nav-btn:hover {
+      transform: translateX(3px);
+      background: #fff;
+      color: var(--ink);
+    }
+    .nav-btn.active {
+      background: var(--ink);
+      color: var(--paper);
+      border-color: var(--ink);
+      box-shadow: 0 18px 34px rgba(9, 11, 18, 0.18);
+    }
+    .settings-panel {
+      padding: 20px;
+      min-width: 0;
+      background: #fff;
+    }
+    .settings-panel.panel-enter { animation: panelEnter 0.28s ease-out both; }
+    .group-head {
+      margin-bottom: 18px;
+      display: grid;
+      gap: 5px;
+    }
+    .group-title { font-size: 24px; line-height: 1.1; font-weight: 950; letter-spacing: 0; }
+    .group-desc { color: var(--muted); font-size: 13px; font-weight: 700; }
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .field-row {
+      border: 1px solid var(--line-soft);
+      border-radius: 8px;
+      padding: 15px;
+      background: rgba(255, 255, 255, 0.86);
+      min-width: 0;
+      transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+    }
+    .field-row:hover {
+      transform: translateY(-1px);
+      border-color: rgba(0, 0, 0, 0.16);
+      box-shadow: 0 14px 30px rgba(8, 12, 20, 0.08);
+    }
+    .field-row.full { grid-column: 1 / -1; }
+    .field-row.is-hidden { display: none; }
+    .field-label {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 9px;
+      font-weight: 900;
+      color: var(--text);
+    }
+    .field-key {
+      color: var(--muted-2);
+      font-weight: 700;
+      font-size: 11px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      overflow-wrap: anywhere;
+      text-align: right;
+    }
+    .field-hint {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 8px;
+      overflow-wrap: anywhere;
+    }
+    .control,
+    textarea.control,
+    select.control {
+      width: 100%;
+      min-height: 40px;
+      border: 1px solid rgba(18, 23, 35, 0.14);
+      border-radius: 7px;
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+      font-weight: 650;
+      padding: 9px 11px;
+      outline: none;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+    }
+    textarea.control {
+      resize: vertical;
+      min-height: 120px;
+      line-height: 1.55;
+    }
+    .control:focus {
+      background: #fff;
+      border-color: var(--ink);
+      box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
+    }
+    .custom-select {
+      position: relative;
+      width: 100%;
+    }
+    .select-trigger {
+      width: 100%;
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 9px 11px;
+      border: 1px solid rgba(0, 0, 0, 0.14);
+      border-radius: 7px;
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+      font-weight: 750;
+      text-align: left;
+      cursor: pointer;
+      transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+    }
+    .select-trigger:hover,
+    .select-trigger[aria-expanded="true"] {
+      border-color: var(--ink);
+      box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06);
+    }
+    .select-value {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .select-chevron {
+      width: 18px;
+      height: 18px;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      transition: transform 0.18s ease;
+      flex: 0 0 auto;
+    }
+    .select-trigger[aria-expanded="true"] .select-chevron { transform: rotate(180deg); }
+    .select-menu {
+      position: absolute;
+      z-index: 40;
+      left: 0;
+      right: 0;
+      top: calc(100% + 6px);
+      display: none;
+      max-height: 260px;
+      overflow: auto;
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.98);
+      box-shadow: 0 18px 46px rgba(0, 0, 0, 0.14);
+    }
+    .custom-select.open .select-menu { display: grid; gap: 3px; }
+    .select-option {
+      width: 100%;
+      min-height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 7px 9px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+      font-weight: 750;
+      text-align: left;
+      cursor: pointer;
+    }
+    .select-option:hover,
+    .select-option.active {
+      background: var(--paper);
+    }
+    .select-option.selected {
+      background: var(--ink);
+      color: #fff;
+    }
+    .select-option-check {
+      opacity: 0;
+      font-weight: 900;
+      flex: 0 0 auto;
+    }
+    .select-option.selected .select-option-check { opacity: 1; }
+    .toggle {
+      position: relative;
+      width: 46px;
+      height: 26px;
+      display: inline-flex;
+      align-items: center;
+      cursor: pointer;
+      flex: 0 0 auto;
+    }
+    .toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+    .toggle-track {
+      width: 46px;
+      height: 26px;
+      border-radius: 999px;
+      background: #c8ced8;
+      transition: background 0.18s ease, box-shadow 0.18s ease;
+      position: relative;
+    }
+    .toggle-track::after {
+      content: "";
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      left: 3px;
+      top: 3px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.24);
+      transition: transform 0.18s ease;
+    }
+    .toggle input:checked + .toggle-track {
+      background: var(--ink);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+    }
+    .toggle input:checked + .toggle-track::after { transform: translateX(20px); background: #fff; }
+    .object-block {
+      grid-column: 1 / -1;
+      border: 1px solid rgba(18, 23, 35, 0.12);
+      border-radius: 8px;
+      padding: 15px;
+      background: var(--paper-soft);
+    }
+    .object-title {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      font-weight: 950;
+      margin-bottom: 12px;
+    }
+    .object-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .phase-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .phase-block {
+      border: 1px solid var(--line-soft);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fff;
+    }
+    .phase-title {
+      font-weight: 950;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line-soft);
+    }
+    .phase-fields { display: grid; gap: 11px; }
+    .tag-editor {
+      border: 1px solid rgba(18, 23, 35, 0.14);
+      border-radius: 8px;
+      padding: 9px;
+      background: #fff;
+    }
+    .tag-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; min-height: 24px; }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      max-width: 100%;
+      padding: 5px 8px;
+      border-radius: 999px;
+      background: var(--ink);
+      color: var(--paper);
+      font-size: 12px;
+      line-height: 1.2;
+      font-weight: 800;
+    }
+    .tag span { overflow-wrap: anywhere; }
+    .tag-remove {
+      width: 16px;
+      height: 16px;
+      border: 0;
+      border-radius: 50%;
+      background: transparent;
+      color: currentColor;
+      cursor: pointer;
+      display: inline-grid;
+      place-items: center;
+      padding: 0;
+    }
+    .tag-input-row { display: flex; gap: 6px; }
+    .tag-input { flex: 1 1 auto; min-width: 120px; }
     .table-wrap { overflow-x: auto; }
     table {
       width: 100%;
@@ -97,254 +583,375 @@
       font-size: 13px;
     }
     th, td {
-      padding: 10px 12px;
+      padding: 12px 14px;
       text-align: left;
-      border-bottom: 1px solid #eee;
+      border-bottom: 1px solid var(--line-soft);
       white-space: nowrap;
+      vertical-align: middle;
     }
     th {
-      font-weight: 600;
-      color: #666;
-      background: #fafafa;
-      font-size: 12px;
+      font-weight: 900;
+      color: var(--muted);
+      background: var(--paper-soft);
+      font-size: 11px;
       text-transform: uppercase;
-      letter-spacing: 0.3px;
     }
-    tr:hover { background: #f8f9fa; }
-    td { vertical-align: middle; }
-
-    /* UMO cell */
+    tbody tr { transition: background 0.16s ease; }
+    tbody tr:hover { background: var(--paper-soft); }
     .umo-cell {
-      max-width: 180px;
+      max-width: 240px;
       overflow: hidden;
       text-overflow: ellipsis;
       direction: rtl;
       text-align: left;
+      display: inline-block;
+      vertical-align: middle;
     }
-    .umo-cell[title] { cursor: help; }
-
-    /* Phase badge */
+    .source-tag {
+      display: inline-flex;
+      align-items: center;
+      margin-left: 6px;
+      padding: 3px 7px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 900;
+      background: #eef1f6;
+      color: #4c566a;
+    }
     .badge {
       display: inline-flex;
       align-items: center;
-      gap: 4px;
-      padding: 3px 8px;
-      border-radius: 12px;
+      gap: 6px;
+      padding: 5px 9px;
+      border-radius: 999px;
       font-size: 12px;
-      font-weight: 500;
+      font-weight: 900;
     }
-    .badge-menstrual { background: #fee2e2; color: #991b1b; }
-    .badge-follicular { background: #dbeafe; color: #1e40af; }
-    .badge-ovulatory { background: #ede9fe; color: #5b21b6; }
-    .badge-luteal { background: #fef3c7; color: #92400e; }
-    .source-tag {
-      display: inline-block;
-      padding: 1px 5px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: 500;
-      margin-left: 4px;
-      background: #e5e7eb;
-      color: #6b7280;
-    }
-    .dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      display: inline-block;
-    }
-    .dot-menstrual { background: #ef4444; }
-    .dot-follicular { background: #3b82f6; }
-    .dot-ovulatory { background: #8b5cf6; }
-    .dot-luteal { background: #f59e0b; }
-
-    /* Toggle switch */
-    .switch {
-      position: relative;
-      display: inline-block;
-      width: 36px;
-      height: 20px;
-      cursor: pointer;
-    }
-    .switch input { opacity: 0; width: 0; height: 0; }
-    .slider {
-      position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: #ccc;
-      border-radius: 20px;
-      transition: 0.2s;
-    }
-    .slider::before {
-      content: "";
-      position: absolute;
-      height: 14px;
-      width: 14px;
-      left: 3px;
-      bottom: 3px;
-      background: #fff;
-      border-radius: 50%;
-      transition: 0.2s;
-    }
-    .switch input:checked + .slider { background: #4caf50; }
-    .switch input:checked + .slider::before { transform: translateX(16px); }
-
-    /* Actions */
-    .actions { display: flex; gap: 4px; flex-wrap: wrap; }
-
-    /* Empty state */
+    .badge-menstrual,
+    .badge-follicular,
+    .badge-ovulatory,
+    .badge-luteal { background: var(--phase-soft); color: var(--phase-text); border: 1px solid var(--line-soft); }
+    .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+    .dot-menstrual,
+    .dot-follicular,
+    .dot-ovulatory,
+    .dot-luteal { background: var(--ink); }
+    .actions { display: flex; gap: 6px; flex-wrap: wrap; }
     .empty {
+      display: grid;
+      place-items: center;
+      gap: 8px;
+      min-height: 180px;
+      color: var(--muted);
       text-align: center;
-      padding: 40px;
-      color: #999;
+      font-weight: 800;
     }
-    .empty-icon {
-      font-size: 32px;
-      margin-bottom: 8px;
+    .empty-visual {
+      width: 44px;
+      height: 44px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      color: var(--ink);
+      background: #fff;
+      border: 1px solid rgba(59, 130, 255, 0.16);
     }
-
-    /* Modal */
+    .loading {
+      min-height: 120px;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      text-align: center;
+      font-weight: 800;
+    }
+    .spinner {
+      width: 22px;
+      height: 22px;
+      border: 2px solid #dbe4ef;
+      border-top-color: var(--ink);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 8px;
+    }
     .modal-overlay {
       display: none;
       position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0,0,0,0.4);
+      inset: 0;
+      background: rgba(9, 11, 18, 0.58);
       align-items: center;
       justify-content: center;
+      padding: 20px;
       z-index: 100;
+      backdrop-filter: blur(10px);
     }
     .modal-overlay.show { display: flex; }
     .modal {
-      background: #fff;
-      border-radius: 10px;
-      padding: 20px;
-      width: 360px;
-      max-width: 90%;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+      background: var(--panel-solid);
+      border-radius: 8px;
+      width: 380px;
+      max-width: 100%;
+      border: 1px solid var(--line-soft);
+      box-shadow: 0 24px 80px rgba(9, 11, 18, 0.28);
     }
     .modal-title {
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 16px;
+      padding: 15px 17px;
+      border-bottom: 1px solid var(--line-soft);
+      font-weight: 950;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
-    .modal-body { margin-bottom: 16px; }
-    .modal-body label {
-      display: block;
-      font-size: 12px;
-      color: #666;
-      margin-bottom: 4px;
-    }
-    .modal-body input[type="date"] {
-      width: 100%;
-      padding: 8px 10px;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      font-size: 14px;
-      font-family: inherit;
-    }
+    .modal-body { padding: 17px; }
     .modal-footer {
       display: flex;
       justify-content: flex-end;
       gap: 8px;
+      padding: 13px 17px;
+      border-top: 1px solid var(--line-soft);
     }
-
-    /* Loading */
-    .loading {
-      text-align: center;
-      padding: 40px;
-      color: #999;
+    .modal-wide { width: 560px; }
+    .modal-title-warning { color: var(--warning); }
+    .is-hidden { display: none !important; }
+    .mood-risk-card,
+    .mood-risk-modal {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      border: 1px solid var(--line);
+      background: var(--warning-soft);
+      color: var(--ink);
+      border-radius: 8px;
+      padding: 13px;
     }
-    .spinner {
-      display: inline-block;
-      width: 20px;
-      height: 20px;
-      border: 2px solid #e0e0e0;
-      border-top-color: #1976d2;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      margin-right: 8px;
-      vertical-align: middle;
+    .mood-risk-card { grid-column: 1 / -1; margin-bottom: 14px; }
+    .risk-icon {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 7px;
+      background: #fff;
+      border: 1px solid var(--line);
+      color: var(--warning);
+      flex: 0 0 auto;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* Error */
-    .error-bar {
-      background: #fee2e2;
-      color: #991b1b;
-      padding: 10px 14px;
-      border-radius: 6px;
-      margin-bottom: 16px;
+    .risk-title { font-weight: 950; margin-bottom: 4px; }
+    .risk-copy { color: var(--muted); font-size: 13px; }
+    .risk-list {
+      margin: 8px 0 0 18px;
+      color: var(--muted);
       font-size: 13px;
+    }
+    .risk-list li + li { margin-top: 4px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes pageEnter {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes panelEnter {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @media (max-width: 1180px) {
+      .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .field-grid,
+      .object-grid,
+      .phase-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 760px) {
+      body { padding: 12px; background: var(--paper); }
+      .topbar { align-items: flex-start; flex-direction: column; padding: 14px; }
+      .toolbar { justify-content: stretch; }
+      .toolbar .btn { flex: 1 1 auto; }
+      .summary-grid { grid-template-columns: 1fr; }
+      .settings-layout { grid-template-columns: 1fr; }
+      .settings-nav {
+        border-right: 0;
+        border-bottom: 1px solid var(--line-soft);
+        flex-direction: row;
+        overflow-x: auto;
+      }
+      .nav-btn { width: auto; flex: 0 0 auto; }
+      .section-head { align-items: flex-start; flex-direction: column; }
+      .section-actions { width: 100%; justify-content: stretch; }
+      .section-actions .btn { flex: 1 1 auto; }
+      th, td { padding: 10px 11px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.001ms !important;
+      }
     }
   </style>
 </head>
 <body>
+  <svg class="svg-defs" aria-hidden="true">
+    <symbol id="icon-calendar" viewBox="0 0 24 24"><path d="M8 2v4"></path><path d="M16 2v4"></path><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M3 10h18"></path></symbol>
+    <symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.4 6.4"></path><path d="M3 12A9 9 0 0 1 18.4 5.6"></path><path d="M18 2v4h4"></path><path d="M6 22v-4H2"></path></symbol>
+    <symbol id="icon-save" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"></path><path d="M17 21v-8H7v8"></path><path d="M7 3v5h8"></path></symbol>
+    <symbol id="icon-settings" viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 1 1 4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.3 7A2 2 0 1 1 7.1 4.2l.1.1a1.7 1.7 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6h.1a1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 1 1 20.1 7l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.6 1h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.6 1Z"></path></symbol>
+    <symbol id="icon-command" viewBox="0 0 24 24"><path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0 0-6Z"></path></symbol>
+    <symbol id="icon-message" viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4Z"></path></symbol>
+    <symbol id="icon-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"></path></symbol>
+    <symbol id="icon-heart" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"></path></symbol>
+    <symbol id="icon-compress" viewBox="0 0 24 24"><path d="M4 14h6v6"></path><path d="m10 14-7 7"></path><path d="M20 10h-6V4"></path><path d="m14 10 7-7"></path></symbol>
+    <symbol id="icon-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></symbol>
+    <symbol id="icon-plus" viewBox="0 0 24 24"><path d="M12 5v14"></path><path d="M5 12h14"></path></symbol>
+    <symbol id="icon-minus" viewBox="0 0 24 24"><path d="M5 12h14"></path></symbol>
+    <symbol id="icon-trash" viewBox="0 0 24 24"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M19 6l-1 14H6L5 6"></path><path d="M10 11v5"></path><path d="M14 11v5"></path></symbol>
+    <symbol id="icon-edit" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path></symbol>
+    <symbol id="icon-x" viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></symbol>
+    <symbol id="icon-list" viewBox="0 0 24 24"><path d="M8 6h13"></path><path d="M8 12h13"></path><path d="M8 18h13"></path><path d="M3 6h.01"></path><path d="M3 12h.01"></path><path d="M3 18h.01"></path></symbol>
+    <symbol id="icon-power" viewBox="0 0 24 24"><path d="M12 2v10"></path><path d="M18.4 6.6a9 9 0 1 1-12.8 0"></path></symbol>
+    <symbol id="icon-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></symbol>
+    <symbol id="icon-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"></path></symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24"><path d="m20 6-11 11-5-5"></path></symbol>
+  </svg>
+
   <div class="container">
-    <div class="header">
-      <h1>周期管理面板</h1>
-      <button class="btn btn-primary" id="btn-refresh" onclick="loadData()">
-        <span>刷新</span>
-      </button>
-    </div>
-
-    <div id="error-bar"></div>
-
-    <!-- Global Config Card -->
-    <div class="card">
-      <div class="card-title">全局默认配置</div>
-      <div class="config-grid" id="global-config">
-        <div class="loading"><span class="spinner"></span>加载中...</div>
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark"><svg class="icon icon-lg"><use href="#icon-calendar"></use></svg></div>
+        <div>
+          <h1>周期管理面板</h1>
+          <div class="subtitle">配置、提示词与会话状态</div>
+          <div class="topbar-meta">
+            <span class="issue-pill">Issue 02 / Cycle Atelier</span>
+            <span class="state-pill solid" id="topbar-sync-state">已同步</span>
+            <span class="state-pill" id="topbar-session-count">0 Sessions</span>
+          </div>
+        </div>
       </div>
-    </div>
+      <div class="toolbar">
+        <button class="btn btn-secondary" id="btn-refresh" type="button">
+          <svg class="icon"><use href="#icon-refresh"></use></svg>
+          <span>刷新</span>
+        </button>
+        <button class="btn btn-primary" id="btn-save" type="button" disabled>
+          <svg class="icon"><use href="#icon-save"></use></svg>
+          <span>保存</span>
+        </button>
+      </div>
+    </header>
 
-    <!-- Sessions Table Card -->
-    <div class="card">
-      <div class="card-title">会话列表</div>
-      <div class="table-wrap" id="sessions-container">
-        <div class="loading"><span class="spinner"></span>加载中...</div>
+    <div id="message-bar" class="message-bar"></div>
+
+    <section class="summary-band">
+      <div class="summary-grid" id="summary-grid">
+        <div class="loading"><div><div class="spinner"></div>加载中...</div></div>
+      </div>
+    </section>
+
+    <main class="main-stack">
+      <section class="section" id="settings-section">
+        <div class="section-head">
+          <div class="section-title">
+            <svg class="icon"><use href="#icon-settings"></use></svg>
+            <span>插件设置</span>
+          </div>
+          <div class="section-actions">
+            <span class="dirty-state" id="dirty-state">已同步</span>
+            <button class="btn btn-primary" id="btn-save-inline" type="button" disabled>
+              <svg class="icon"><use href="#icon-save"></use></svg>
+              <span>保存设置</span>
+            </button>
+          </div>
+        </div>
+        <div class="settings-layout">
+          <nav class="settings-nav" id="settings-nav"></nav>
+          <div class="settings-panel" id="settings-panel">
+            <div class="loading"><div><div class="spinner"></div>加载中...</div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <div class="section-title">
+            <svg class="icon"><use href="#icon-users"></use></svg>
+            <span>会话列表</span>
+          </div>
+        </div>
+        <div class="table-wrap" id="sessions-container">
+          <div class="loading"><div><div class="spinner"></div>加载中...</div></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-overlay" id="modal-anchor">
+    <div class="modal">
+      <div class="modal-title">
+        <svg class="icon"><use href="#icon-edit"></use></svg>
+        <span>修改锚点日期</span>
+      </div>
+      <div class="modal-body">
+        <label class="field-label" for="input-date">新的经期首日</label>
+        <input class="control" type="date" id="input-date">
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" type="button" id="btn-modal-cancel">取消</button>
+        <button class="btn btn-primary" type="button" id="btn-modal-confirm">确认</button>
       </div>
     </div>
   </div>
 
-  <!-- Anchor Date Modal -->
-  <div class="modal-overlay" id="modal-anchor">
-    <div class="modal">
-      <div class="modal-title">修改锚点日期</div>
+  <div class="modal-overlay" id="modal-mood-warning">
+    <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="mood-warning-title">
+      <div class="modal-title modal-title-warning">
+        <svg class="icon"><use href="#icon-alert"></use></svg>
+        <span id="mood-warning-title">情绪系统仍在开发中</span>
+      </div>
       <div class="modal-body">
-        <label>新的经期首日</label>
-        <input type="date" id="input-date">
+        <div class="mood-risk-modal">
+          <div class="risk-icon"><svg class="icon"><use href="#icon-alert"></use></svg></div>
+          <div>
+            <div class="risk-title">实验性功能 / 开发中</div>
+            <div class="risk-copy">
+              开启后 Bot 会根据用户态度和周期阶段产生情绪波动，可能出现不回复、回复异常或行为不可控的情况。
+            </div>
+            <ul class="risk-list">
+              <li>每条消息最多会触发 3 次额外 LLM 调用，token 消耗会明显增加。</li>
+              <li>如果测试时出现 Bot 不回复、沉默过久或行为不符合预期，请立即关闭情绪系统总开关。</li>
+              <li>建议先在测试会话里开启，确认稳定后再用于正式环境。</li>
+            </ul>
+          </div>
+        </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeModal()">取消</button>
-        <button class="btn btn-primary" onclick="confirmAnchor()">确认</button>
+        <button class="btn btn-secondary" type="button" id="btn-mood-warning-cancel">取消</button>
+        <button class="btn btn-primary" type="button" id="btn-mood-warning-confirm">
+          <svg class="icon"><use href="#icon-alert"></use></svg>
+          <span>我知道了</span>
+        </button>
       </div>
     </div>
   </div>
 
   <script>
-    // Wait for AstrBot bridge
-    let bridgeReady = false;
+    const GROUPS = [
+      { id: 'cycle', title: '周期基础', icon: 'calendar', desc: '默认日期、周期天数与排卵窗口。', fields: ['default_anchor_date', 'default_cycle_length', 'default_period_length', 'default_enabled', 'cycle_settings'] },
+      { id: 'inject', title: '注入与指令', icon: 'command', desc: '指令权限、注入频率、注入位置与触发词。', fields: ['commands_enabled', 'auto_inject', 'inject_mode', 'inject_location', 'trigger_keywords', 'max_prompt_length', 'warmup_rounds'] },
+      { id: 'prompt', title: '提示词显示', icon: 'message', desc: '基础锚点、阶段文案、禁用词与显示项。', fields: ['anchor_prompt', 'phases', 'forbidden_words', 'include_time_modifier', 'include_day_number', 'include_phase_name', 'ooc_shield', 'ooc_replace'] },
+      { id: 'scope', title: '生效范围', icon: 'shield', desc: '全局注入、白名单和黑名单范围。', fields: ['global_inject', 'umo_mode', 'umo_list'] },
+      { id: 'mood', title: '情绪系统', icon: 'heart', desc: '情绪工具、模型选择与高级提示词。', fields: ['mood_system_enabled', 'mood_scope', 'mood_history_length', 'cold_violence_behavior', 'enable_cold_violence', 'enable_read_no_reply', 'enable_perfunctory_reply', 'enable_seek_comfort', 'enable_delayed_reply', 'enable_emotional_outburst', 'enable_topic_shift', 'mood_detector_provider_id', 'mood_detector_read_system_prompt', 'mood_detector_system_prompt_max_length', 'mood_detector_screen_prompt', 'mood_detector_consult_prompt', 'mood_detector_interpret_prompt'] },
+      { id: 'compression', title: '提示词压缩', icon: 'compress', desc: '启动压缩、自动触发和压缩比例。', fields: ['prompt_compression_enabled', 'prompt_compression_auto_trigger', 'prompt_compression_ratio'] },
+    ];
 
-    async function init() {
-      // Bridge SDK is injected by AstrBot asynchronously; poll until available
-      let attempts = 0;
-      while (typeof AstrBotPluginPage === 'undefined' && attempts < 50) {
-        await new Promise(r => setTimeout(r, 100));
-        attempts++;
-      }
-      if (typeof AstrBotPluginPage === 'undefined') {
-        showError('Bridge SDK 初始化失败: AstrBotPluginPage 不可用');
-        return;
-      }
-      try {
-        await AstrBotPluginPage.ready();
-        bridgeReady = true;
-        loadData();
-      } catch (e) {
-        showError('Bridge SDK 初始化失败: ' + e.message);
-      }
-    }
+    const OPTION_LABELS = {
+      commands_enabled: { all: '全部指令', readonly: '只读', none: '禁用' },
+      inject_mode: { every_request: '每次对话', interval_3: '每 3 次', on_trigger: '关键词触发', only_status: '仅状态查询' },
+      inject_location: { extra_user_content_parts: 'Extra 内容后（推荐）', user_message_before: '用户消息前', system_prompt_append: '系统提示词后', fake_tool_call: '伪工具调用' },
+      umo_mode: { whitelist: '白名单', blacklist: '黑名单' },
+      mood_scope: { per_umo: '按会话独立', global: '全局共享' },
+      cold_violence_behavior: { silent: '直接沉默', angry_then_silent: '先生气再沉默', outburst_then_silent: '先爆发再沉默' },
+    };
 
-    // Phase colors mapping
     const PHASE_CLASS = {
       menstrual: 'badge-menstrual',
       follicular: 'badge-follicular',
@@ -357,108 +964,416 @@
       ovulatory: 'dot-ovulatory',
       luteal: 'dot-luteal',
     };
+    const PHASE_LABELS = {
+      menstrual: '月经期',
+      follicular: '卵泡期',
+      ovulatory: '排卵期',
+      luteal: '黄体期',
+    };
 
+    let schema = {};
+    let defaults = {};
+    let providerOptions = [];
+    let formState = {};
     let currentSessions = [];
+    let activeGroup = 'cycle';
+    let dirty = false;
+    let bridgeReady = false;
     let pendingUmo = null;
+    let dependencyKeys = new Set();
+    let moodWarningSeen = false;
+    let moodWarningResolver = null;
+    let moodWarningMode = 'info';
+    let moodWarningLastFocus = null;
 
-    function showError(msg) {
-      const el = document.getElementById('error-bar');
-      if (msg) {
-        el.textContent = msg;
-        el.className = 'error-bar';
-      } else {
-        el.textContent = '';
-        el.className = '';
+    const $ = (id) => document.getElementById(id);
+
+    async function init() {
+      bindStaticEvents();
+      let attempts = 0;
+      while (typeof AstrBotPluginPage === 'undefined' && attempts < 50) {
+        await new Promise(r => setTimeout(r, 100));
+        attempts++;
+      }
+      if (typeof AstrBotPluginPage === 'undefined') {
+        showMessage('Bridge SDK 初始化失败: AstrBotPluginPage 不可用', 'error');
+        return;
+      }
+      try {
+        await AstrBotPluginPage.ready();
+        bridgeReady = true;
+        await loadData();
+      } catch (e) {
+        showMessage('Bridge SDK 初始化失败: ' + e.message, 'error');
       }
     }
 
-    async function loadData() {
-      showError('');
-      document.getElementById('global-config').innerHTML = '<div class="loading"><span class="spinner"></span>加载中...</div>';
-      document.getElementById('sessions-container').innerHTML = '<div class="loading"><span class="spinner"></span>加载中...</div>';
+    function bindStaticEvents() {
+      $('btn-refresh').addEventListener('click', () => {
+        if (dirty && !confirm('当前设置还没有保存，确定要刷新吗？')) return;
+        loadData();
+      });
+      $('btn-save').addEventListener('click', saveConfig);
+      $('btn-save-inline').addEventListener('click', saveConfig);
+      $('btn-modal-cancel').addEventListener('click', closeModal);
+      $('btn-modal-confirm').addEventListener('click', confirmAnchor);
+      $('btn-mood-warning-cancel').addEventListener('click', () => resolveMoodWarning(false));
+      $('btn-mood-warning-confirm').addEventListener('click', () => resolveMoodWarning(true));
+      $('modal-anchor').addEventListener('click', (event) => {
+        if (event.target === $('modal-anchor')) closeModal();
+      });
+      $('modal-mood-warning').addEventListener('click', (event) => {
+        if (event.target === $('modal-mood-warning')) resolveMoodWarning(false);
+      });
+      document.addEventListener('click', handleClick);
+      document.addEventListener('input', handleInput);
+      document.addEventListener('change', handleChange);
+      document.addEventListener('keydown', handleKeydown);
+    }
 
+    async function loadData() {
+      if (!bridgeReady) return;
+      showMessage('', 'info');
+      renderLoading();
       try {
         const [sessionsRes, configRes] = await Promise.all([
           AstrBotPluginPage.apiGet('sessions'),
           AstrBotPluginPage.apiGet('config'),
         ]);
-
-        renderConfig(configRes);
-        renderSessions(sessionsRes);
+        normalizeConfig(configRes);
+        const sessionsData = unwrapApiData(sessionsRes);
+        currentSessions = sessionsData.sessions || [];
+        dirty = false;
+        renderAll();
+        updateDirtyState();
       } catch (e) {
-        showError('加载数据失败: ' + e.message);
-        document.getElementById('global-config').innerHTML = '';
-        document.getElementById('sessions-container').innerHTML = '';
+        showMessage('加载数据失败: ' + e.message, 'error');
       }
     }
 
-    function renderConfig(data) {
-      const cfg = data.data || {};
-      const items = [
-        { label: '默认锚点日期', value: cfg.default_anchor_date || '未设置', empty: !cfg.default_anchor_date },
-        { label: '自动启用', value: cfg.default_enabled ? '是' : '否' },
-        { label: '默认周期长度', value: (cfg.default_cycle_length || 28) + ' 天' },
-        { label: '默认经期长度', value: (cfg.default_period_length || 5) + ' 天' },
-        { label: '排卵日', value: '第 ' + (cfg.cycle_settings?.ovulation_day || 14) + ' 天' },
-        { label: '排卵期窗口', value: (cfg.cycle_settings?.ovulation_window || 3) + ' 天' },
-      ];
+    function renderLoading() {
+      $('summary-grid').innerHTML = '<div class="loading"><div><div class="spinner"></div>加载中...</div></div>';
+      $('settings-panel').innerHTML = '<div class="loading"><div><div class="spinner"></div>加载中...</div></div>';
+      $('sessions-container').innerHTML = '<div class="loading"><div><div class="spinner"></div>加载中...</div></div>';
+    }
 
-      document.getElementById('global-config').innerHTML = items.map(item => `
-        <div class="config-item">
-          <div class="label">${item.label}</div>
-          <div class="value ${item.empty ? 'empty' : ''}">${item.value}</div>
+    function normalizeConfig(response) {
+      const data = unwrapApiData(response);
+      schema = data.schema || {};
+      defaults = data.defaults || {};
+      providerOptions = data.provider_options || [];
+      const cfg = data.config || data || {};
+      formState = deepMerge(defaults, cfg);
+      dependencyKeys = collectDependencyKeys(schema);
+    }
+
+    function unwrapApiData(response) {
+      if (!response || typeof response !== 'object') return {};
+      if ('status' in response && response.data && typeof response.data === 'object') {
+        return response.data;
+      }
+      return response;
+    }
+
+    function renderAll() {
+      renderSummary();
+      renderSettingsNav();
+      renderSettingsPanel();
+      renderSessions();
+    }
+
+    function renderSummary() {
+      const cycle = formState.cycle_settings || {};
+      const items = [
+        { icon: 'power', label: '模拟总开关', value: formState.auto_inject ? '开启' : '关闭' },
+        { icon: 'calendar', label: '默认锚点', value: formState.default_anchor_date || '未设置' },
+        { icon: 'calendar', label: '周期与经期', value: `${valueOr(formState.default_cycle_length, 28)} / ${valueOr(formState.default_period_length, 5)} 天` },
+        { icon: 'command', label: '注入模式', value: optionLabel('inject_mode', formState.inject_mode || 'every_request') },
+        { icon: 'heart', label: '情绪系统', value: formState.mood_system_enabled ? '开启' : '关闭' },
+        { icon: 'compress', label: '提示词压缩', value: formState.prompt_compression_enabled ? `${valueOr(formState.prompt_compression_ratio, 30)}%` : '关闭' },
+        { icon: 'settings', label: '排卵参数', value: `第 ${valueOr(cycle.ovulation_day, 14)} 天 / ${valueOr(cycle.ovulation_window, 3)} 天` },
+        { icon: 'users', label: '会话数量', value: `${currentSessions.length} 个` },
+      ];
+      $('summary-grid').innerHTML = items.map(item => `
+        <div class="metric">
+          <div class="metric-icon"><svg class="icon"><use href="#icon-${item.icon}"></use></svg></div>
+          <div>
+            <div class="metric-label">${escapeHtml(item.label)}</div>
+            <div class="metric-value">${escapeHtml(item.value)}</div>
+          </div>
         </div>
+      `).join('');
+      syncTopbarStatus();
+    }
+
+    function syncTopbarStatus() {
+      setText('topbar-sync-state', dirty ? 'Unsaved Edits' : '已同步');
+      setText('topbar-session-count', `${currentSessions.length} Sessions`);
+    }
+
+    function setText(id, text) {
+      const el = $(id);
+      if (el) el.textContent = text;
+    }
+
+    function renderSettingsNav() {
+      const used = new Set(GROUPS.flatMap(group => group.fields));
+      const extraFields = Object.keys(schema).filter(key => !used.has(key));
+      const groups = extraFields.length
+        ? [...GROUPS, { id: 'advanced', title: '其他设置', icon: 'settings', desc: '尚未归类的配置项。', fields: extraFields }]
+        : GROUPS;
+      if (!groups.some(group => group.id === activeGroup)) activeGroup = groups[0]?.id || 'cycle';
+      $('settings-nav').innerHTML = groups.map(group => `
+        <button type="button" class="nav-btn ${group.id === activeGroup ? 'active' : ''}" data-group="${escapeAttr(group.id)}">
+          <svg class="icon"><use href="#icon-${group.icon}"></use></svg>
+          <span>${escapeHtml(group.title)}</span>
+        </button>
       `).join('');
     }
 
-    function renderSessions(data) {
-      const sessions = (data.data?.sessions) || [];
-      currentSessions = sessions;
-
-      if (sessions.length === 0) {
-        document.getElementById('sessions-container').innerHTML = `
-          <div class="empty">
-            <div class="empty-icon">📋</div>
-            <div>暂无会话数据</div>
-            <div style="font-size: 12px; margin-top: 4px;">在聊天中使用 /period set 设置周期后，会话将显示在这里</div>
-          </div>
-        `;
+    function renderSettingsPanel() {
+      const used = new Set(GROUPS.flatMap(group => group.fields));
+      const extraFields = Object.keys(schema).filter(key => !used.has(key));
+      const groups = extraFields.length
+        ? [...GROUPS, { id: 'advanced', title: '其他设置', icon: 'settings', desc: '尚未归类的配置项。', fields: extraFields }]
+        : GROUPS;
+      const group = groups.find(item => item.id === activeGroup) || groups[0];
+      if (!group) {
+        $('settings-panel').innerHTML = emptyState('settings', '暂无配置项');
         return;
       }
+      const fields = group.fields
+        .filter(key => schema[key])
+        .map(key => renderField(key, schema[key], key))
+        .join('');
+      $('settings-panel').innerHTML = `
+        <div class="group-head">
+          <div class="group-title">${escapeHtml(group.title)}</div>
+          <div class="group-desc">${escapeHtml(cleanText(group.desc))}</div>
+        </div>
+        ${group.id === 'mood' ? renderMoodWarningPanel() : ''}
+        <div class="field-grid">${fields || emptyState('list', '暂无配置项')}</div>
+      `;
+      replayPanelAnimation();
+    }
 
-      const rows = sessions.map(s => {
-        const umoShort = s.umo.split(':').pop() || s.umo;
-        const badgeClass = PHASE_CLASS[s.phase] || '';
-        const dotClass = DOT_CLASS[s.phase] || '';
-        const sourceTag = s.source === 'global_default'
-          ? '<span class="source-tag">全局默认</span>'
-          : '';
+    function replayPanelAnimation() {
+      const panel = $('settings-panel');
+      panel.classList.remove('panel-enter');
+      void panel.offsetWidth;
+      panel.classList.add('panel-enter');
+    }
+
+    function renderMoodWarningPanel() {
+      const enabledText = formState.mood_system_enabled ? '当前状态：已开启' : '当前状态：未开启';
+      return `
+        <div class="mood-risk-card" id="mood-risk-card" role="note" aria-label="情绪系统实验性警告">
+          <div class="risk-icon"><svg class="icon"><use href="#icon-alert"></use></svg></div>
+          <div>
+            <div class="risk-title">实验性功能 / 开发中</div>
+            <div class="risk-copy" id="mood-risk-status">
+              ${escapeHtml(enabledText)}。情绪系统可能让 Bot 沉默、敷衍、求安慰或爆发；每条消息最多会触发 3 次额外 LLM 调用，token 消耗会明显增加。
+            </div>
+            <ul class="risk-list">
+              <li>测试时如果出现不回复、回复异常或行为不可控，请立即关闭总开关。</li>
+              <li>建议先用测试会话验证，再扩大到正式会话。</li>
+            </ul>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderField(key, meta, path) {
+      if (!meta || typeof meta !== 'object') return '';
+      const visible = isConditionMet(meta.condition);
+      const conditionAttr = meta.condition ? ` data-condition="${escapeAttr(JSON.stringify(meta.condition))}"` : '';
+      if (meta.type === 'object') {
+        if (path === 'phases') return renderPhases(key, meta, path, visible, conditionAttr);
+        const items = meta.items || {};
+        const nested = Object.keys(items).map(childKey => renderField(childKey, items[childKey], `${path}.${childKey}`)).join('');
         return `
-          <tr data-umo="${escapeHtml(s.umo)}">
-            <td><span class="umo-cell" title="${escapeHtml(s.umo)}">${escapeHtml(umoShort)}${sourceTag}</span></td>
+          <div class="object-block ${visible ? '' : 'is-hidden'}" data-field-path="${escapeAttr(path)}"${conditionAttr}>
+            <div class="object-title">
+              <span>${escapeHtml(cleanText(meta.description) || key)}</span>
+              <span class="field-key">${escapeHtml(path)}</span>
+            </div>
+            <div class="object-grid">${nested}</div>
+            ${renderHint(meta)}
+          </div>
+        `;
+      }
+      const isFull = meta.type === 'text' || meta.type === 'list' || path.includes('prompt');
+      return `
+        <div class="field-row ${isFull ? 'full' : ''} ${visible ? '' : 'is-hidden'}" data-field-path="${escapeAttr(path)}"${conditionAttr}>
+          <div class="field-label">
+            <span>${escapeHtml(cleanText(meta.description) || key)}</span>
+            <span class="field-key">${escapeHtml(path)}</span>
+          </div>
+          ${renderControl(key, meta, path)}
+          ${renderHint(meta)}
+        </div>
+      `;
+    }
+
+    function renderPhases(key, meta, path, visible, conditionAttr) {
+      const items = meta.items || {};
+      const blocks = Object.keys(items).map(phaseKey => {
+        const phaseMeta = items[phaseKey] || {};
+        const phaseFields = Object.keys(phaseMeta.items || {})
+          .map(childKey => renderField(childKey, phaseMeta.items[childKey], `${path}.${phaseKey}.${childKey}`))
+          .join('');
+        return `
+          <div class="phase-block">
+            <div class="phase-title">${escapeHtml(PHASE_LABELS[phaseKey] || cleanText(phaseMeta.description) || phaseKey)}</div>
+            <div class="phase-fields">${phaseFields}</div>
+          </div>
+        `;
+      }).join('');
+      return `
+        <div class="object-block ${visible ? '' : 'is-hidden'}" data-field-path="${escapeAttr(path)}"${conditionAttr}>
+          <div class="object-title">
+            <span>${escapeHtml(cleanText(meta.description) || key)}</span>
+            <span class="field-key">${escapeHtml(path)}</span>
+          </div>
+          <div class="phase-grid">${blocks}</div>
+          ${renderHint(meta)}
+        </div>
+      `;
+    }
+
+    function renderControl(key, meta, path) {
+      const value = getPath(formState, path);
+      if (meta._special === 'select_provider') return renderProviderSelect(path, value);
+      if (meta.options) return renderSelect(path, value, meta.options);
+      if (meta.type === 'bool') {
+        return `
+          <label class="toggle" title="${escapeAttr(cleanText(meta.description) || path)}">
+            <input type="checkbox" class="config-control" data-type="bool" data-path="${escapeAttr(path)}" ${value ? 'checked' : ''}>
+            <span class="toggle-track"></span>
+          </label>
+        `;
+      }
+      if (meta.type === 'int') {
+        const min = meta.min !== undefined ? ` min="${escapeAttr(meta.min)}"` : '';
+        const max = meta.max !== undefined ? ` max="${escapeAttr(meta.max)}"` : '';
+        return `<input class="control config-control" type="number" data-type="int" data-path="${escapeAttr(path)}" value="${escapeAttr(value ?? '')}"${min}${max}>`;
+      }
+      if (meta.type === 'list') return renderTagEditor(path, Array.isArray(value) ? value : []);
+      if (meta.type === 'text') {
+        const rows = path === 'anchor_prompt' ? 8 : 5;
+        return `<textarea class="control config-control" data-type="text" data-path="${escapeAttr(path)}" rows="${rows}">${escapeHtml(value ?? '')}</textarea>`;
+      }
+      if (path === 'default_anchor_date') {
+        return `<input class="control config-control" type="date" data-type="string" data-path="${escapeAttr(path)}" value="${escapeAttr(value ?? '')}">`;
+      }
+      return `<input class="control config-control" type="text" data-type="string" data-path="${escapeAttr(path)}" value="${escapeAttr(value ?? '')}">`;
+    }
+
+    function renderSelect(path, value, options) {
+      const normalized = options.map(opt => ({ value: opt, label: optionLabel(path, opt) }));
+      return renderCustomSelect(path, value, normalized);
+    }
+
+    function renderProviderSelect(path, value) {
+      const exists = providerOptions.some(option => option.id === value);
+      const options = [{ value: '', label: '使用默认模型' }];
+      if (value && !exists) options.push({ value, label: `${value}（未找到）` });
+      providerOptions.forEach(option => {
+        options.push({ value: option.id, label: option.label || option.id });
+      });
+      return renderCustomSelect(path, value || '', options);
+    }
+
+    function renderCustomSelect(path, value, options) {
+      const selected = options.find(option => option.value === value) || options[0] || { value: '', label: '未设置' };
+      const optionHtml = options.map(option => `
+        <button class="select-option ${option.value === selected.value ? 'selected' : ''}" type="button" role="option" aria-selected="${option.value === selected.value ? 'true' : 'false'}" data-select-option data-path="${escapeAttr(path)}" data-value="${escapeAttr(option.value)}">
+          <span>${escapeHtml(option.label)}</span>
+          <span class="select-option-check"><svg class="icon"><use href="#icon-check"></use></svg></span>
+        </button>
+      `).join('');
+      return `
+        <div class="custom-select" data-select data-path="${escapeAttr(path)}">
+          <button class="select-trigger config-control" type="button" data-type="custom-select" data-path="${escapeAttr(path)}" aria-haspopup="listbox" aria-expanded="false">
+            <span class="select-value">${escapeHtml(selected.label)}</span>
+            <span class="select-chevron"><svg class="icon"><use href="#icon-chevron"></use></svg></span>
+          </button>
+          <div class="select-menu" role="listbox">${optionHtml}</div>
+        </div>
+      `;
+    }
+
+    function renderTagEditor(path, items) {
+      const tags = items.map(item => `
+        <span class="tag">
+          <span>${escapeHtml(item)}</span>
+          <button type="button" class="tag-remove" data-tag-remove data-path="${escapeAttr(path)}" data-value="${escapeAttr(item)}" title="删除">
+            <svg class="icon"><use href="#icon-x"></use></svg>
+          </button>
+        </span>
+      `).join('');
+      return `
+        <div class="tag-editor" data-path="${escapeAttr(path)}">
+          <div class="tag-list">${tags}</div>
+          <div class="tag-input-row">
+            <input class="control tag-input" type="text" data-path="${escapeAttr(path)}" placeholder="输入后回车">
+            <button class="btn btn-secondary btn-icon" type="button" data-tag-add data-path="${escapeAttr(path)}" title="添加">
+              <svg class="icon"><use href="#icon-plus"></use></svg>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderHint(meta) {
+      const hint = cleanText(meta.hint || '');
+      return hint ? `<div class="field-hint">${escapeHtml(hint)}</div>` : '';
+    }
+
+    function renderSessions() {
+      if (!currentSessions.length) {
+        $('sessions-container').innerHTML = emptyState('list', '暂无会话数据');
+        return;
+      }
+      const rows = currentSessions.map(session => {
+        const umoShort = session.umo.split(':').pop() || session.umo;
+        const badgeClass = PHASE_CLASS[session.phase] || '';
+        const dotClass = DOT_CLASS[session.phase] || '';
+        const sourceTag = session.source === 'global_default' ? '<span class="source-tag">全局默认</span>' : '<span class="source-tag">手动配置</span>';
+        const daysText = session.days_to_next === 0 ? '正处于经期' : `还有 ${session.days_to_next} 天`;
+        return `
+          <tr data-umo="${escapeAttr(session.umo)}">
+            <td><span class="umo-cell" title="${escapeAttr(session.umo)}">${escapeHtml(umoShort)}</span>${sourceTag}</td>
             <td>
-              <label class="switch" title="开关">
-                <input type="checkbox" ${s.enabled ? 'checked' : ''} data-action="toggle">
-                <span class="slider"></span>
+              <label class="toggle" title="开关">
+                <input type="checkbox" data-session-toggle ${session.enabled ? 'checked' : ''}>
+                <span class="toggle-track"></span>
               </label>
             </td>
-            <td><span class="badge ${badgeClass}"><span class="dot ${dotClass}"></span>${escapeHtml(s.phase_label)}</span></td>
-            <td>阶段第 ${s.phase_day} 天 / 周期第 ${s.total_day} 天</td>
-            <td>${s.days_to_next === 0 ? '正处于经期' : '还有 ' + s.days_to_next + ' 天'}</td>
-            <td>${s.advance_days || 0} 天</td>
+            <td><span class="badge ${badgeClass}"><span class="dot ${dotClass}"></span>${escapeHtml(session.phase_label)}</span></td>
+            <td>阶段第 ${session.phase_day} 天 / 周期第 ${session.total_day} 天</td>
+            <td>${escapeHtml(daysText)}</td>
+            <td>${session.advance_days || 0} 天</td>
             <td>
               <div class="actions">
-                <button class="btn btn-sm btn-secondary" data-action="advance" data-days="1">+1</button>
-                <button class="btn btn-sm btn-secondary" data-action="advance" data-days="-1">-1</button>
-                <button class="btn btn-sm btn-primary" data-action="anchor">改日期</button>
-                <button class="btn btn-sm btn-danger" data-action="delete">删除</button>
+                <button class="btn btn-sm btn-secondary" type="button" data-session-action="advance" data-days="1" title="快进一天">
+                  <svg class="icon"><use href="#icon-plus"></use></svg><span>1</span>
+                </button>
+                <button class="btn btn-sm btn-secondary" type="button" data-session-action="advance" data-days="-1" title="后退一天">
+                  <svg class="icon"><use href="#icon-minus"></use></svg><span>1</span>
+                </button>
+                <button class="btn btn-sm btn-secondary" type="button" data-session-action="anchor" title="改日期">
+                  <svg class="icon"><use href="#icon-edit"></use></svg><span>日期</span>
+                </button>
+                <button class="btn btn-sm btn-danger" type="button" data-session-action="delete" title="删除">
+                  <svg class="icon"><use href="#icon-trash"></use></svg>
+                </button>
               </div>
             </td>
           </tr>
         `;
       }).join('');
-
-      document.getElementById('sessions-container').innerHTML = `
+      $('sessions-container').innerHTML = `
         <table>
           <thead>
             <tr>
@@ -474,107 +1389,510 @@
           <tbody>${rows}</tbody>
         </table>
       `;
-      bindRowEvents();
     }
 
-    function escapeHtml(str) {
-      if (!str) return '';
-      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
+    function handleClick(event) {
+      const trigger = event.target.closest('[data-select] .select-trigger');
+      if (trigger) {
+        event.preventDefault();
+        toggleCustomSelect(trigger.closest('[data-select]'));
+        return;
+      }
 
-    function bindRowEvents() {
-      document.querySelectorAll('#sessions-container tbody tr').forEach(row => {
+      const option = event.target.closest('[data-select-option]');
+      if (option) {
+        event.preventDefault();
+        chooseCustomSelectOption(option);
+        return;
+      }
+
+      if (!event.target.closest('[data-select]')) closeCustomSelects();
+
+      const nav = event.target.closest('[data-group]');
+      if (nav) {
+        activeGroup = nav.dataset.group;
+        renderSettingsNav();
+        renderSettingsPanel();
+        if (activeGroup === 'mood') maybeShowMoodGroupWarning();
+        return;
+      }
+
+      const add = event.target.closest('[data-tag-add]');
+      if (add) {
+        const editor = add.closest('.tag-editor');
+        addTag(editor);
+        return;
+      }
+
+      const remove = event.target.closest('[data-tag-remove]');
+      if (remove) {
+        removeTag(remove.dataset.path, remove.dataset.value);
+        return;
+      }
+
+      const action = event.target.closest('[data-session-action]');
+      if (action) {
+        const row = action.closest('tr');
+        if (!row) return;
         const umo = row.dataset.umo;
-        if (!umo) return;
+        const type = action.dataset.sessionAction;
+        if (type === 'advance') advanceSession(umo, parseInt(action.dataset.days, 10));
+        if (type === 'anchor') openAnchorModal(umo);
+        if (type === 'delete') deleteSession(umo);
+      }
+    }
 
-        const toggleInput = row.querySelector('input[data-action="toggle"]');
-        if (toggleInput) {
-          toggleInput.onchange = () => toggleSession(umo);
+    function handleInput(event) {
+      const target = event.target;
+      if (!target.classList.contains('config-control')) return;
+      if (target.dataset.type === 'custom-select') return;
+      if (target.dataset.type === 'bool') return;
+      updateControlValue(target);
+    }
+
+    async function handleChange(event) {
+      const target = event.target;
+      if (target.matches('[data-session-toggle]')) {
+        const row = target.closest('tr');
+        if (row) toggleSession(row.dataset.umo);
+        return;
+      }
+      if (!target.classList.contains('config-control')) return;
+      if (target.dataset.type === 'custom-select') return;
+      const path = target.dataset.path;
+      if (path === 'mood_system_enabled' && target.dataset.type === 'bool' && target.checked && !getPath(formState, path)) {
+        const confirmed = await showMoodWarning({ mode: 'enable' });
+        if (!confirmed) {
+          target.checked = false;
+          return;
         }
+      }
+      updateControlValue(target);
+      if (path === 'mood_system_enabled') updateMoodRiskStatus();
+      if (dependencyKeys.has(target.dataset.path.split('.')[0])) {
+        renderSettingsPanel();
+      }
+    }
 
-        row.querySelectorAll('button[data-action="advance"]').forEach(btn => {
-          const days = parseInt(btn.dataset.days, 10);
-          btn.onclick = () => advanceSession(umo, days);
-        });
+    function updateMoodRiskStatus() {
+      const el = $('mood-risk-status');
+      if (!el) return;
+      const enabledText = formState.mood_system_enabled ? '当前状态：已开启' : '当前状态：未开启';
+      el.textContent = `${enabledText}。情绪系统可能让 Bot 沉默、敷衍、求安慰或爆发；每条消息最多会触发 3 次额外 LLM 调用，token 消耗会明显增加。`;
+    }
 
-        const anchorBtn = row.querySelector('button[data-action="anchor"]');
-        if (anchorBtn) {
-          anchorBtn.onclick = () => openAnchorModal(umo);
-        }
+    function maybeShowMoodGroupWarning() {
+      if (moodWarningSeen) return;
+      moodWarningSeen = true;
+      showMoodWarning({ mode: 'info' });
+    }
 
-        const deleteBtn = row.querySelector('button[data-action="delete"]');
-        if (deleteBtn) {
-          deleteBtn.onclick = () => deleteSession(umo);
-        }
+    function showMoodWarning(options = {}) {
+      if (moodWarningResolver) {
+        if ((options.mode || 'info') === 'enable') return Promise.resolve(false);
+        return Promise.resolve(true);
+      }
+      moodWarningMode = options.mode || 'info';
+      const enableMode = moodWarningMode === 'enable';
+      $('mood-warning-title').textContent = enableMode ? '确认开启情绪系统' : '情绪系统仍在开发中';
+      $('btn-mood-warning-cancel').classList.toggle('is-hidden', !enableMode);
+      $('btn-mood-warning-confirm').querySelector('span').textContent = enableMode ? '继续开启' : '我知道了';
+      moodWarningLastFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      $('modal-mood-warning').classList.add('show');
+      setTimeout(() => $('btn-mood-warning-confirm').focus(), 0);
+      return new Promise(resolve => {
+        moodWarningResolver = resolve;
       });
     }
 
+    function resolveMoodWarning(accepted) {
+      const modal = $('modal-mood-warning');
+      if (!modal.classList.contains('show')) return;
+      modal.classList.remove('show');
+      const resolver = moodWarningResolver;
+      moodWarningResolver = null;
+      const result = moodWarningMode === 'enable' ? accepted : true;
+      if (moodWarningLastFocus && typeof moodWarningLastFocus.focus === 'function') {
+        moodWarningLastFocus.focus({ preventScroll: true });
+      }
+      moodWarningLastFocus = null;
+      if (resolver) resolver(result);
+    }
+
+    function handleKeydown(event) {
+      const customSelect = event.target.closest('[data-select]');
+      if (customSelect && handleCustomSelectKeydown(event, customSelect)) return;
+
+      if ($('modal-mood-warning').classList.contains('show')) {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          resolveMoodWarning(false);
+          return;
+        }
+        if (event.key === 'Tab') {
+          trapMoodWarningFocus(event);
+          return;
+        }
+      }
+      if (event.key !== 'Enter') return;
+      const input = event.target.closest('.tag-input');
+      if (!input) return;
+      event.preventDefault();
+      addTag(input.closest('.tag-editor'));
+    }
+
+    function trapMoodWarningFocus(event) {
+      const modal = $('modal-mood-warning');
+      const focusables = Array.from(modal.querySelectorAll('button:not(.is-hidden):not(:disabled), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'));
+      if (!focusables.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    function toggleCustomSelect(selectEl) {
+      if (!selectEl) return;
+      const isOpen = selectEl.classList.contains('open');
+      closeCustomSelects();
+      if (!isOpen) openCustomSelect(selectEl);
+    }
+
+    function openCustomSelect(selectEl) {
+      selectEl.classList.add('open');
+      const trigger = selectEl.querySelector('.select-trigger');
+      trigger?.setAttribute('aria-expanded', 'true');
+      const selected = selectEl.querySelector('.select-option.selected') || selectEl.querySelector('.select-option');
+      selected?.classList.add('active');
+    }
+
+    function closeCustomSelects() {
+      document.querySelectorAll('[data-select].open').forEach(selectEl => {
+        selectEl.classList.remove('open');
+        selectEl.querySelector('.select-trigger')?.setAttribute('aria-expanded', 'false');
+        selectEl.querySelectorAll('.select-option.active').forEach(option => option.classList.remove('active'));
+      });
+    }
+
+    function chooseCustomSelectOption(option) {
+      const path = option.dataset.path;
+      const value = option.dataset.value || '';
+      if (!path) return;
+      setPath(formState, path, value);
+      closeCustomSelects();
+      markDirty();
+      renderSummary();
+      if (dependencyKeys.has(path.split('.')[0])) {
+        renderSettingsPanel();
+      } else {
+        const selectEl = document.querySelector(`[data-select][data-path="${cssEscape(path)}"]`);
+        if (selectEl) refreshCustomSelect(selectEl, value);
+      }
+    }
+
+    function refreshCustomSelect(selectEl, value) {
+      const options = Array.from(selectEl.querySelectorAll('.select-option'));
+      const selected = options.find(option => (option.dataset.value || '') === value) || options[0];
+      options.forEach(option => {
+        const isSelected = option === selected;
+        option.classList.toggle('selected', isSelected);
+        option.setAttribute('aria-selected', isSelected ? 'true' : 'false');
+      });
+      const label = selected?.querySelector('span')?.textContent || '未设置';
+      const valueEl = selectEl.querySelector('.select-value');
+      if (valueEl) valueEl.textContent = label;
+    }
+
+    function handleCustomSelectKeydown(event, selectEl) {
+      const trigger = event.target.closest('.select-trigger');
+      const option = event.target.closest('.select-option');
+      if (!trigger && !option) return false;
+      if (event.key === 'Escape') {
+        closeCustomSelects();
+        selectEl.querySelector('.select-trigger')?.focus();
+        event.preventDefault();
+        return true;
+      }
+      if (trigger && (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown')) {
+        openCustomSelect(selectEl);
+        const first = selectEl.querySelector('.select-option.selected') || selectEl.querySelector('.select-option');
+        first?.focus();
+        event.preventDefault();
+        return true;
+      }
+      if (option && (event.key === 'Enter' || event.key === ' ')) {
+        chooseCustomSelectOption(option);
+        selectEl.querySelector('.select-trigger')?.focus();
+        event.preventDefault();
+        return true;
+      }
+      if (option && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+        const options = Array.from(selectEl.querySelectorAll('.select-option'));
+        const index = options.indexOf(option);
+        const next = event.key === 'ArrowDown'
+          ? options[Math.min(index + 1, options.length - 1)]
+          : options[Math.max(index - 1, 0)];
+        option.classList.remove('active');
+        next?.classList.add('active');
+        next?.focus();
+        event.preventDefault();
+        return true;
+      }
+      return false;
+    }
+
+    function updateControlValue(target) {
+      const path = target.dataset.path;
+      if (!path) return;
+      let value = target.value;
+      if (target.dataset.type === 'bool') value = target.checked;
+      setPath(formState, path, value);
+      markDirty();
+      renderSummary();
+    }
+
+    function addTag(editor) {
+      if (!editor) return;
+      const path = editor.dataset.path;
+      const input = editor.querySelector('.tag-input');
+      const value = (input.value || '').trim();
+      if (!value) return;
+      const list = Array.isArray(getPath(formState, path)) ? [...getPath(formState, path)] : [];
+      if (!list.includes(value)) list.push(value);
+      setPath(formState, path, list);
+      input.value = '';
+      markDirty();
+      renderSettingsPanel();
+    }
+
+    function removeTag(path, value) {
+      const list = Array.isArray(getPath(formState, path)) ? [...getPath(formState, path)] : [];
+      setPath(formState, path, list.filter(item => item !== value));
+      markDirty();
+      renderSettingsPanel();
+    }
+
+    async function saveConfig() {
+      if (!dirty) return;
+      setSaving(true);
+      showMessage('', 'info');
+      try {
+        const result = await AstrBotPluginPage.apiPost('config', { config: formState });
+        normalizeConfig(result);
+        dirty = false;
+        renderAll();
+        updateDirtyState();
+        const data = unwrapApiData(result);
+        showMessage(result.message || '配置已保存', data.persisted === false ? 'info' : 'success');
+      } catch (e) {
+        showMessage('保存失败: ' + e.message, 'error');
+      } finally {
+        setSaving(false);
+      }
+    }
+
     async function toggleSession(umo) {
-      showError('');
       try {
         await AstrBotPluginPage.apiPost(`sessions/${encodeURIComponent(umo)}/toggle`);
-        loadData();
+        await loadData();
       } catch (e) {
-        showError('切换失败: ' + e.message);
+        showMessage('切换失败: ' + e.message, 'error');
       }
     }
 
     async function advanceSession(umo, days) {
-      showError('');
       try {
         await AstrBotPluginPage.apiPost(`sessions/${encodeURIComponent(umo)}/advance`, { days });
-        loadData();
+        await loadData();
       } catch (e) {
-        showError('快进失败: ' + e.message);
+        showMessage('快进失败: ' + e.message, 'error');
       }
     }
 
     function openAnchorModal(umo) {
       pendingUmo = umo;
-      const session = currentSessions.find(s => s.umo === umo);
-      document.getElementById('input-date').value = session ? session.anchor_date : '';
-      document.getElementById('modal-anchor').classList.add('show');
+      const session = currentSessions.find(item => item.umo === umo);
+      $('input-date').value = session ? session.anchor_date : '';
+      $('modal-anchor').classList.add('show');
     }
 
     function closeModal() {
-      document.getElementById('modal-anchor').classList.remove('show');
+      $('modal-anchor').classList.remove('show');
       pendingUmo = null;
     }
 
     async function confirmAnchor() {
       if (!pendingUmo) return;
-      const date = document.getElementById('input-date').value;
+      const date = $('input-date').value;
       if (!date) {
-        showError('请选择日期');
+        showMessage('请选择日期', 'error');
         return;
       }
-      showError('');
       try {
         await AstrBotPluginPage.apiPost(`sessions/${encodeURIComponent(pendingUmo)}/anchor`, { date });
         closeModal();
-        loadData();
+        await loadData();
       } catch (e) {
-        showError('修改日期失败: ' + e.message);
+        showMessage('修改日期失败: ' + e.message, 'error');
       }
     }
 
     async function deleteSession(umo) {
       if (!confirm('确定要删除该会话的周期数据吗？此操作不可恢复。')) return;
-      showError('');
       try {
         await AstrBotPluginPage.apiPost(`sessions/${encodeURIComponent(umo)}/delete`);
-        loadData();
+        await loadData();
       } catch (e) {
-        showError('删除失败: ' + e.message);
+        showMessage('删除失败: ' + e.message, 'error');
       }
     }
 
-    // Close modal on overlay click
-    document.getElementById('modal-anchor').addEventListener('click', function(e) {
-      if (e.target === this) closeModal();
-    });
+    function emptyState(iconName, text) {
+      return `
+        <div class="empty">
+          <div class="empty-visual"><svg class="icon icon-lg"><use href="#icon-${iconName}"></use></svg></div>
+          <div>${escapeHtml(text)}</div>
+        </div>
+      `;
+    }
 
-    // Init
+    function showMessage(message, type) {
+      const el = $('message-bar');
+      if (!message) {
+        el.className = 'message-bar';
+        el.textContent = '';
+        return;
+      }
+      el.className = `message-bar show message-${type || 'info'}`;
+      el.textContent = message;
+    }
+
+    function markDirty() {
+      if (!dirty) dirty = true;
+      updateDirtyState();
+    }
+
+    function updateDirtyState() {
+      $('dirty-state').textContent = dirty ? '有未保存更改' : '已同步';
+      $('btn-save').disabled = !dirty;
+      $('btn-save-inline').disabled = !dirty;
+      const topbarState = $('topbar-sync-state');
+      if (topbarState) {
+        topbarState.textContent = dirty ? 'Unsaved Edits' : '已同步';
+        topbarState.classList.toggle('solid', !dirty);
+      }
+    }
+
+    function setSaving(saving) {
+      $('btn-save').disabled = saving || !dirty;
+      $('btn-save-inline').disabled = saving || !dirty;
+      $('btn-save').querySelector('span').textContent = saving ? '保存中' : '保存';
+      $('btn-save-inline').querySelector('span').textContent = saving ? '保存中' : '保存设置';
+    }
+
+    function isConditionMet(condition) {
+      if (!condition || typeof condition !== 'object') return true;
+      return Object.keys(condition).every(key => getPath(formState, key) === condition[key]);
+    }
+
+    function collectDependencyKeys(rootSchema) {
+      const keys = new Set();
+      walkSchema(rootSchema, (meta) => {
+        if (meta.condition && typeof meta.condition === 'object') {
+          Object.keys(meta.condition).forEach(key => keys.add(key.split('.')[0]));
+        }
+      });
+      return keys;
+    }
+
+    function walkSchema(root, visitor) {
+      Object.keys(root || {}).forEach(key => {
+        const meta = root[key];
+        if (!meta || typeof meta !== 'object') return;
+        visitor(meta);
+        if (meta.items) walkSchema(meta.items, visitor);
+      });
+    }
+
+    function getPath(source, path) {
+      return String(path).split('.').reduce((current, part) => {
+        if (!current || typeof current !== 'object') return undefined;
+        return current[part];
+      }, source);
+    }
+
+    function setPath(source, path, value) {
+      const parts = String(path).split('.');
+      let current = source;
+      parts.slice(0, -1).forEach(part => {
+        if (!current[part] || typeof current[part] !== 'object') current[part] = {};
+        current = current[part];
+      });
+      current[parts[parts.length - 1]] = value;
+    }
+
+    function deepMerge(base, override) {
+      const result = clone(base || {});
+      Object.keys(override || {}).forEach(key => {
+        if (isPlainObject(result[key]) && isPlainObject(override[key])) {
+          result[key] = deepMerge(result[key], override[key]);
+        } else {
+          result[key] = clone(override[key]);
+        }
+      });
+      return result;
+    }
+
+    function clone(value) {
+      if (value === undefined) return undefined;
+      return JSON.parse(JSON.stringify(value));
+    }
+
+    function isPlainObject(value) {
+      return value && typeof value === 'object' && !Array.isArray(value);
+    }
+
+    function valueOr(value, fallback) {
+      return value === undefined || value === null || value === '' ? fallback : value;
+    }
+
+    function optionLabel(path, value) {
+      const key = path.split('.').pop();
+      return OPTION_LABELS[key]?.[value] || OPTION_LABELS[path]?.[value] || value;
+    }
+
+    function cleanText(text) {
+      return String(text || '')
+        .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\uFE0F]/gu, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value);
+    }
+
+    function cssEscape(value) {
+      if (window.CSS && typeof window.CSS.escape === 'function') {
+        return window.CSS.escape(value);
+      }
+      return String(value).replace(/["\\]/g, '\\$&');
+    }
+
     init();
   </script>
 </body>

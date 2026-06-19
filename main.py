@@ -2,6 +2,10 @@
 
 import asyncio
 import datetime
+import json
+from copy import deepcopy
+from pathlib import Path
+from typing import Any
 
 from quart import jsonify, request
 
@@ -86,6 +90,202 @@ class PeriodPlugin(Star):
     #  Web API (for dashboard)
     # ------------------------------------------------------------------ #
 
+    def _load_config_schema(self) -> dict:
+        """读取插件配置 schema，供 WebUI 自动渲染和后端校验使用。"""
+        schema_path = Path(__file__).with_name("_conf_schema.json")
+        try:
+            with schema_path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else {}
+        except (OSError, json.JSONDecodeError) as e:
+            logger.warning(f"[PeriodPlugin] 读取配置 schema 失败: {e}")
+            return {}
+
+    def _extract_schema_defaults(self, schema: dict) -> dict:
+        """从 schema 中递归提取默认值。"""
+        defaults = {}
+        for key, meta in schema.items():
+            if not isinstance(meta, dict):
+                continue
+            if meta.get("type") == "object":
+                defaults[key] = self._extract_schema_defaults(meta.get("items", {}))
+            elif "default" in meta:
+                defaults[key] = deepcopy(meta["default"])
+        return defaults
+
+    def _deep_merge_dicts(self, base: dict, override: dict) -> dict:
+        """递归合并配置，保留未出现在 override 中的旧字段。"""
+        merged = deepcopy(base)
+        for key, value in override.items():
+            if (
+                isinstance(value, dict)
+                and isinstance(merged.get(key), dict)
+            ):
+                merged[key] = self._deep_merge_dicts(merged[key], value)
+            else:
+                merged[key] = deepcopy(value)
+        return merged
+
+    def _build_full_config(self) -> tuple[dict, dict, dict]:
+        """返回当前完整配置、schema 和默认值。"""
+        schema = self._load_config_schema()
+        defaults = self._extract_schema_defaults(schema)
+        current = self._deep_merge_dicts(defaults, dict(self.config))
+        return current, schema, defaults
+
+    def _get_provider_options(self) -> list[dict[str, str]]:
+        """列出可供 WebUI 下拉选择的聊天模型。"""
+        try:
+            providers = self.context.get_all_providers()
+        except Exception as e:
+            logger.warning(f"[PeriodPlugin] 读取 provider 列表失败: {e}")
+            return []
+
+        options = []
+        for provider in providers or []:
+            try:
+                meta = provider.meta()
+                provider_id = str(getattr(meta, "id", "") or "")
+                if not provider_id:
+                    continue
+                model = str(getattr(meta, "model", "") or "")
+                provider_type = str(getattr(meta, "type", "") or "")
+                label_parts = [provider_id]
+                if model:
+                    label_parts.append(model)
+                if provider_type:
+                    label_parts.append(provider_type)
+                options.append(
+                    {
+                        "id": provider_id,
+                        "label": " / ".join(label_parts),
+                        "model": model,
+                        "type": provider_type,
+                    }
+                )
+            except Exception as e:
+                logger.warning(f"[PeriodPlugin] 解析 provider 信息失败: {e}")
+        return options
+
+    def _coerce_config_value(
+        self,
+        key_path: str,
+        value: Any,
+        meta: dict,
+        old_value: Any = None,
+    ) -> tuple[Any, list[str]]:
+        """按 schema 清洗单个配置值，返回清洗结果和错误列表。"""
+        errors: list[str] = []
+        field_type = meta.get("type", "string")
+
+        if field_type == "object":
+            if value is None:
+                value = {}
+            if not isinstance(value, dict):
+                return old_value if isinstance(old_value, dict) else {}, [f"{key_path} 必须是对象"]
+            old_obj = old_value if isinstance(old_value, dict) else {}
+            cleaned, child_errors = self._sanitize_config(
+                value,
+                meta.get("items", {}),
+                old_obj,
+                key_path,
+            )
+            return cleaned, child_errors
+
+        if field_type == "bool":
+            if not isinstance(value, bool):
+                return old_value, [f"{key_path} 必须是布尔值"]
+            return value, []
+
+        if field_type == "int":
+            if isinstance(value, bool):
+                return old_value, [f"{key_path} 必须是整数"]
+            if isinstance(value, float) and not value.is_integer():
+                return old_value, [f"{key_path} 必须是整数"]
+            try:
+                coerced = int(value)
+            except (TypeError, ValueError):
+                return old_value, [f"{key_path} 必须是整数"]
+            min_value = meta.get("min")
+            max_value = meta.get("max")
+            if min_value is not None and coerced < min_value:
+                errors.append(f"{key_path} 不能小于 {min_value}")
+            if max_value is not None and coerced > max_value:
+                errors.append(f"{key_path} 不能大于 {max_value}")
+            return coerced, errors
+
+        if field_type == "list":
+            if not isinstance(value, list):
+                return old_value if isinstance(old_value, list) else [], [f"{key_path} 必须是列表"]
+            cleaned_list = []
+            for item in value:
+                if not isinstance(item, str):
+                    errors.append(f"{key_path} 中的每一项都必须是字符串")
+                    continue
+                cleaned_item = item.strip()
+                if cleaned_item:
+                    cleaned_list.append(cleaned_item)
+            return cleaned_list, errors
+
+        if field_type in ("string", "text"):
+            if value is None:
+                value = ""
+            if not isinstance(value, str):
+                return old_value if isinstance(old_value, str) else "", [f"{key_path} 必须是字符串"]
+            if key_path == "default_anchor_date" and value:
+                try:
+                    datetime.datetime.strptime(value, "%Y-%m-%d")
+                except ValueError:
+                    return old_value, ["default_anchor_date 日期格式错误，请使用 YYYY-MM-DD"]
+            options = meta.get("options")
+            if options and value not in options:
+                return old_value, [f"{key_path} 必须是以下值之一: {', '.join(options)}"]
+            return value, []
+
+        return deepcopy(value), []
+
+    def _sanitize_config(
+        self,
+        incoming: dict,
+        schema: dict,
+        current: dict,
+        prefix: str = "",
+    ) -> tuple[dict, list[str]]:
+        """递归清洗提交的配置，只处理 schema 中定义的字段并保留旧字段。"""
+        cleaned = deepcopy(current)
+        errors: list[str] = []
+        for key, meta in schema.items():
+            if not isinstance(meta, dict) or key not in incoming:
+                continue
+            key_path = f"{prefix}.{key}" if prefix else key
+            value, value_errors = self._coerce_config_value(
+                key_path,
+                incoming[key],
+                meta,
+                cleaned.get(key),
+            )
+            if value_errors:
+                errors.extend(value_errors)
+                continue
+            cleaned[key] = value
+        return cleaned, errors
+
+    def _save_live_config(self, next_config: dict) -> tuple[bool, str]:
+        """保存配置文件并同步当前运行态。"""
+        save_config = getattr(self.config, "save_config", None)
+        persisted = callable(save_config)
+        if persisted:
+            save_config(next_config)
+        else:
+            self.config.clear()
+            self.config.update(next_config)
+            return False, "当前配置对象不支持 save_config，已仅更新运行态配置"
+
+        # AstrBotConfig.save_config 会 update 自身；这里再同步一次，兼容不同实现。
+        self.config.clear()
+        self.config.update(next_config)
+        return True, "配置已保存并即时生效"
+
     def _register_web_apis(self) -> None:
         """Register Web API routes for the dashboard page."""
         base = f"/{self.__class__.name}"
@@ -101,6 +301,12 @@ class PeriodPlugin(Star):
             self._webapi_get_config,
             ["GET"],
             "Get global default config",
+        )
+        self.context.register_web_api(
+            f"{base}/config",
+            self._webapi_save_config,
+            ["POST"],
+            "Save plugin config",
         )
         self.context.register_web_api(
             f"{base}/sessions/<umo>/toggle",
@@ -267,19 +473,65 @@ class PeriodPlugin(Star):
 
     async def _webapi_get_config(self):
         """GET /astrbot_plugin_period/config"""
-        cycle_settings = self.config.get("cycle_settings", {})
+        current, schema, defaults = self._build_full_config()
         return jsonify(
             {
                 "status": "ok",
                 "data": {
-                    "default_anchor_date": self.config.get("default_anchor_date", ""),
-                    "default_enabled": self.config.get("default_enabled", False),
-                    "default_cycle_length": self.config.get("default_cycle_length", 28),
-                    "default_period_length": self.config.get("default_period_length", 5),
-                    "cycle_settings": {
-                        "ovulation_day": cycle_settings.get("ovulation_day", 14),
-                        "ovulation_window": cycle_settings.get("ovulation_window", 3),
-                    },
+                    **current,
+                    "config": current,
+                    "schema": schema,
+                    "defaults": defaults,
+                    "provider_options": self._get_provider_options(),
+                },
+            }
+        )
+
+    async def _webapi_save_config(self):
+        """POST /astrbot_plugin_period/config"""
+        body = await request.get_json()
+        if body is None:
+            body = {}
+        if not isinstance(body, dict):
+            return jsonify({"status": "error", "message": "配置数据必须是对象"}), 400
+
+        incoming = body.get("config", body)
+        if not isinstance(incoming, dict):
+            return jsonify({"status": "error", "message": "config 必须是对象"}), 400
+
+        current, schema, defaults = self._build_full_config()
+        base_config = self._deep_merge_dicts(defaults, current)
+        next_config, errors = self._sanitize_config(incoming, schema, base_config)
+        if errors:
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": "配置校验失败",
+                        "errors": errors,
+                    }
+                ),
+                400,
+            )
+
+        try:
+            persisted, message = self._save_live_config(next_config)
+        except Exception as e:
+            logger.warning(f"[PeriodPlugin] 保存 WebUI 配置失败: {e}")
+            return jsonify({"status": "error", "message": f"保存配置失败: {e}"}), 500
+
+        current, schema, defaults = self._build_full_config()
+        return jsonify(
+            {
+                "status": "ok",
+                "message": message,
+                "data": {
+                    **current,
+                    "config": current,
+                    "schema": schema,
+                    "defaults": defaults,
+                    "provider_options": self._get_provider_options(),
+                    "persisted": persisted,
                 },
             }
         )
@@ -849,7 +1101,7 @@ class PeriodPlugin(Star):
         # Dynamic state: choose injection location based on config
         hour = datetime.datetime.now().hour
         dynamic = self.prompt_builder.build_dynamic(info.phase, info.day, hour)
-        location = self.config.get("inject_location", "user_message_before")
+        location = self.config.get("inject_location", "extra_user_content_parts")
         logger.info(
             "[PeriodPlugin][umo=%s] 动态状态注入位置: %s",
             umo, location,

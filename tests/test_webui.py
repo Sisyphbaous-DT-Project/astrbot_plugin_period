@@ -1,7 +1,9 @@
 """Tests for WebUI dashboard Web API handlers."""
 
 import sys
+from copy import deepcopy
 from pathlib import Path
+from unittest.mock import MagicMock
 
 # Add parent dir so astrbot_plugin_period is importable as a package
 _parent = Path(__file__).parent.parent.parent
@@ -15,10 +17,23 @@ from quart import request
 from astrbot_plugin_period.main import PeriodPlugin
 
 
+class SaveableConfig(dict):
+    """测试用配置对象，模拟 AstrBotConfig 的保存行为。"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.saved_config = None
+
+    def save_config(self, replace_config=None):
+        if replace_config:
+            self.update(replace_config)
+            self.saved_config = dict(replace_config)
+
+
 @pytest.fixture
 def webui_plugin(tmp_path, sample_config, monkeypatch):
     """PeriodPlugin instance with WebUI-relevant config, isolated data dir."""
-    config = dict(sample_config)
+    config = SaveableConfig(deepcopy(sample_config))
     # Keep default_anchor_date empty so not-found tests return 404
     from astrbot.api.star import Context, StarTools
     ctx = Context()
@@ -32,6 +47,12 @@ def _unwrap(result):
     if isinstance(result, tuple):
         return result[0], result[1] if len(result) > 1 else 200
     return result, 200
+
+
+def _dashboard_html() -> str:
+    return (Path(__file__).parent.parent / "pages/dashboard/index.html").read_text(
+        encoding="utf-8"
+    )
 
 
 async def _collect_async_gen(generator):
@@ -506,6 +527,162 @@ async def test_webapi_get_config(webui_plugin):
     assert data["default_period_length"] == 5
     assert data["cycle_settings"]["ovulation_day"] == 14
     assert data["cycle_settings"]["ovulation_window"] == 3
+    assert data["config"]["default_anchor_date"] == "2025-05-01"
+    assert "schema" in data
+    assert "defaults" in data
+    assert "provider_options" in data
+
+
+@pytest.mark.asyncio
+async def test_webapi_get_config_returns_provider_options(webui_plugin):
+    provider = MagicMock()
+    provider.meta.return_value = MagicMock(
+        id="provider-a",
+        model="small-model",
+        type="openai",
+    )
+    webui_plugin.context.get_all_providers = MagicMock(return_value=[provider])
+
+    result, status = _unwrap(await webui_plugin._webapi_get_config())
+
+    assert status == 200
+    options = result["data"]["provider_options"]
+    assert options == [{
+        "id": "provider-a",
+        "label": "provider-a / small-model / openai",
+        "model": "small-model",
+        "type": "openai",
+    }]
+
+
+# --------------------------------------------------------------------------- #
+#  POST /config
+# --------------------------------------------------------------------------- #
+
+@pytest.mark.asyncio
+async def test_webapi_save_config_updates_nested_list_and_text(webui_plugin):
+    webui_plugin.config["unknown_keep"] = "keep-me"
+    request.set_json({
+        "config": {
+            "default_anchor_date": "2026-05-01",
+            "default_period_length": "3",
+            "inject_mode": "on_trigger",
+            "trigger_keywords": ["还好吗", "不舒服"],
+            "forbidden_words": ["月经", " 激素 ", ""],
+            "phases": {
+                "menstrual": {
+                    "prompt": "新的主体感受\n保留换行",
+                },
+            },
+            "mood_detector_provider_id": "provider-a",
+        }
+    })
+
+    result, status = _unwrap(await webui_plugin._webapi_save_config())
+
+    assert status == 200
+    assert result["status"] == "ok"
+    assert result["data"]["persisted"] is True
+    assert webui_plugin.config["default_anchor_date"] == "2026-05-01"
+    assert webui_plugin.config["default_period_length"] == 3
+    assert webui_plugin.config["trigger_keywords"] == ["还好吗", "不舒服"]
+    assert webui_plugin.config["forbidden_words"] == ["月经", "激素"]
+    assert webui_plugin.config["phases"]["menstrual"]["prompt"] == "新的主体感受\n保留换行"
+    assert webui_plugin.config["phases"]["menstrual"]["time_morning"] == "早晨绞痛。"
+    assert webui_plugin.config["mood_detector_provider_id"] == "provider-a"
+    assert webui_plugin.config["unknown_keep"] == "keep-me"
+    assert webui_plugin.config.saved_config["unknown_keep"] == "keep-me"
+
+
+@pytest.mark.asyncio
+async def test_webapi_save_config_partial_keeps_hidden_condition_fields(webui_plugin):
+    webui_plugin.config["inject_mode"] = "on_trigger"
+    webui_plugin.config["trigger_keywords"] = ["怎么了"]
+    webui_plugin.config["global_inject"] = False
+    webui_plugin.config["umo_list"] = ["default:FriendMessage:1"]
+    webui_plugin.config["prompt_compression_enabled"] = True
+    webui_plugin.config["prompt_compression_ratio"] = 30
+
+    request.set_json({
+        "config": {
+            "inject_mode": "every_request",
+            "global_inject": True,
+            "prompt_compression_enabled": False,
+        }
+    })
+
+    result, status = _unwrap(await webui_plugin._webapi_save_config())
+
+    assert status == 200
+    assert result["status"] == "ok"
+    assert webui_plugin.config["inject_mode"] == "every_request"
+    assert webui_plugin.config["trigger_keywords"] == ["怎么了"]
+    assert webui_plugin.config["global_inject"] is True
+    assert webui_plugin.config["umo_list"] == ["default:FriendMessage:1"]
+    assert webui_plugin.config["prompt_compression_enabled"] is False
+    assert webui_plugin.config["prompt_compression_ratio"] == 30
+
+
+@pytest.mark.asyncio
+async def test_webapi_save_config_without_save_config_updates_memory(tmp_path, sample_config, monkeypatch):
+    from astrbot.api.star import Context, StarTools
+
+    ctx = Context()
+    monkeypatch.setattr(StarTools, "get_data_dir", lambda _name=None: tmp_path)
+    plugin = PeriodPlugin(ctx, deepcopy(sample_config))
+
+    request.set_json({"config": {"default_period_length": 3}})
+    result, status = _unwrap(await plugin._webapi_save_config())
+
+    assert status == 200
+    assert result["data"]["persisted"] is False
+    assert plugin.config["default_period_length"] == 3
+    assert "仅更新运行态配置" in result["message"]
+
+
+@pytest.mark.asyncio
+async def test_webapi_save_config_rejects_invalid_values(webui_plugin):
+    request.set_json({
+        "config": {
+            "default_anchor_date": "not-a-date",
+            "commands_enabled": "invalid",
+            "mood_history_length": 999,
+            "forbidden_words": "月经",
+            "default_enabled": "true",
+        }
+    })
+
+    result, status = _unwrap(await webui_plugin._webapi_save_config())
+
+    assert status == 400
+    assert result["status"] == "error"
+    assert result["message"] == "配置校验失败"
+    assert any("default_anchor_date" in err for err in result["errors"])
+    assert any("commands_enabled" in err for err in result["errors"])
+    assert any("mood_history_length" in err for err in result["errors"])
+    assert any("forbidden_words" in err for err in result["errors"])
+    assert any("default_enabled" in err for err in result["errors"])
+
+
+@pytest.mark.asyncio
+async def test_webapi_save_config_rejects_fractional_int(webui_plugin):
+    request.set_json({"config": {"mood_history_length": 2.5}})
+
+    result, status = _unwrap(await webui_plugin._webapi_save_config())
+
+    assert status == 400
+    assert result["status"] == "error"
+    assert any("mood_history_length" in err for err in result["errors"])
+
+
+@pytest.mark.asyncio
+async def test_webapi_save_config_rejects_non_object(webui_plugin):
+    request.set_json([])
+
+    result, status = _unwrap(await webui_plugin._webapi_save_config())
+
+    assert status == 400
+    assert result["status"] == "error"
 
 
 # --------------------------------------------------------------------------- #
@@ -774,14 +951,108 @@ async def test_webapi_delete_not_found(webui_plugin):
 
 def test_webapi_routes_registered(webui_plugin):
     """Verify all expected routes are registered on context."""
-    routes = {r[0] for r in webui_plugin.context.registered_web_apis}
+    routes = {(r[0], tuple(r[2])) for r in webui_plugin.context.registered_web_apis}
     base = "/astrbot_plugin_period"
-    assert f"{base}/sessions" in routes
-    assert f"{base}/config" in routes
-    assert f"{base}/sessions/<umo>/toggle" in routes
-    assert f"{base}/sessions/<umo>/advance" in routes
-    assert f"{base}/sessions/<umo>/anchor" in routes
-    assert f"{base}/sessions/<umo>/delete" in routes
+    assert (f"{base}/sessions", ("GET",)) in routes
+    assert (f"{base}/config", ("GET",)) in routes
+    assert (f"{base}/config", ("POST",)) in routes
+    assert (f"{base}/sessions/<umo>/toggle", ("POST",)) in routes
+    assert (f"{base}/sessions/<umo>/advance", ("POST",)) in routes
+    assert (f"{base}/sessions/<umo>/anchor", ("POST",)) in routes
+    assert (f"{base}/sessions/<umo>/delete", ("POST",)) in routes
+
+
+# --------------------------------------------------------------------------- #
+#  Dashboard static checks
+# --------------------------------------------------------------------------- #
+
+def test_dashboard_uses_full_config_editor_and_svg_icons():
+    html = _dashboard_html()
+
+    assert "AstrBotPluginPage.apiPost('config'" in html
+    assert "tag-editor" in html
+    assert "<symbol id=\"icon-calendar\"" in html
+    assert "📋" not in html
+    for char in html:
+        codepoint = ord(char)
+        assert not (0x1F300 <= codepoint <= 0x1FAFF)
+        assert not (0x2600 <= codepoint <= 0x27BF)
+
+
+def test_dashboard_declares_all_primary_setting_groups():
+    html = _dashboard_html()
+
+    for label in ("周期基础", "注入与指令", "提示词显示", "生效范围", "情绪系统", "提示词压缩"):
+        assert label in html
+    for field in (
+        "default_period_length",
+        "trigger_keywords",
+        "forbidden_words",
+        "mood_detector_provider_id",
+        "prompt_compression_ratio",
+    ):
+        assert field in html
+
+
+def test_dashboard_keeps_editorial_theme_without_hero():
+    html = _dashboard_html()
+
+    assert "class=\"topbar\"" in html
+    assert "Issue 02 / Cycle Atelier" in html
+    assert "topbar-sync-state" in html
+    assert "function syncTopbarStatus" in html
+    assert "@media (prefers-reduced-motion: reduce)" in html
+    assert "panel-enter" in html
+    assert "--paper: #f5f5f7" in html
+    assert "background: var(--paper)" in html
+    assert "state-pill solid" in html
+    assert "hero-canvas" not in html
+    assert "initHeroScene" not in html
+    for removed_token in ("--electric", "--magenta", "--acid", "linear-gradient", "radial-gradient", "#b7f13d", "#3b82ff", "#d81b60"):
+        assert removed_token not in html
+
+
+def test_dashboard_uses_custom_select_controls():
+    html = _dashboard_html()
+
+    assert "custom-select" in html
+    assert "select-trigger" in html
+    assert "data-select-option" in html
+    assert "function renderCustomSelect" in html
+    assert "function chooseCustomSelectOption" in html
+    assert "function handleCustomSelectKeydown" in html
+    assert "<symbol id=\"icon-chevron\"" in html
+    assert "<symbol id=\"icon-check\"" in html
+    assert "<select class=\"control config-control\"" not in html
+
+
+def test_dashboard_warns_before_using_mood_system():
+    html = _dashboard_html()
+
+    assert "modal-mood-warning" in html
+    assert "role=\"dialog\"" in html
+    assert "aria-modal=\"true\"" in html
+    assert "aria-labelledby=\"mood-warning-title\"" in html
+    assert "renderMoodWarningPanel" in html
+    assert "maybeShowMoodGroupWarning" in html
+    assert "focus({ preventScroll: true })" in html
+    assert "trapMoodWarningFocus" in html
+    assert "updateMoodRiskStatus" in html
+    assert "确认开启情绪系统" in html
+    assert "实验性功能 / 开发中" in html
+    assert "每条消息最多会触发 3 次额外 LLM 调用" in html
+    assert "path === 'mood_system_enabled'" in html
+    assert "Promise.resolve(false)" in html
+    assert "event.key === 'Escape'" in html
+    assert "<symbol id=\"icon-alert\"" in html
+
+
+def test_dashboard_normalizes_wrapped_and_unwrapped_bridge_responses():
+    html = _dashboard_html()
+
+    assert "function unwrapApiData(response)" in html
+    assert "const sessionsData = unwrapApiData(sessionsRes)" in html
+    assert "const data = unwrapApiData(response)" in html
 
 
 # --------------------------------------------------------------------------- #

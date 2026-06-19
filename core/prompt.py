@@ -25,7 +25,12 @@ class PromptBuilder:
             "你不需要向用户说明原因。"
             "禁止在回复中使用以下词汇或概念来解释自己：{forbidden_words}。"
             "禁止以分析口吻描述自己的身体变化（如\"我因为激素变化所以烦躁\"）。"
-            "请保持你原本的人格，让生理状态自然流露在语气和反应中。",
+            "请保持你原本的人格，让生理状态自然流露在语气和反应中。"
+            "不能说自己今天是什么时期。"
+            "需要尽可能维持平常状态的情绪和人格，不过度表现生理期的情绪特征。"
+            "生理期的情绪和心情只作为参考，请更多遵循自己的主要人设以及当前上下文环境来回复，"
+            "不要在输出中过度使用当前生理期情绪来表达。"
+            "晚上不能催别人睡觉。",
         )
         forbidden = config.get(
             "forbidden_words",
@@ -81,7 +86,7 @@ class PromptBuilder:
             ):
                 time_modifier = self.compressor.get(compressed_time_key)
             else:
-                time_modifier = phase_cfg.get(time_key, "")
+                time_modifier = phase_cfg.get(time_key, self._default_phase_text(phase, time_key))
 
         # Build phase name and day number text
         day_text = ""
@@ -116,8 +121,8 @@ class PromptBuilder:
         result = " ".join(parts)
 
         # Truncate if too long
-        max_len = self.config.get("max_prompt_length", 120)
-        if len(result) > max_len:
+        max_len = self.config.get("max_prompt_length", 0)
+        if max_len > 0 and len(result) > max_len:
             result = result[:max_len] + "…"
 
         return f"[当前生理状态] {result}"
@@ -125,10 +130,48 @@ class PromptBuilder:
     @staticmethod
     def _default_prompt(phase: str) -> str:
         """Default prompt text for each phase."""
+        return PromptBuilder._default_phase_text(phase, "prompt")
+
+    @staticmethod
+    def _default_phase_text(phase: str, key: str) -> str:
+        """Default prompt and time modifier text for each phase."""
         defaults = {
-            "menstrual": "下腹有轻微坠胀感，身体容易疲倦，情绪比平时更敏感，可能需要更多安静和休息。",
-            "follicular": "身体状态逐渐恢复，精力开始回升，心情趋于平稳，对新事物有一定兴趣。",
-            "ovulatory": "身体感觉轻盈，精力较为充沛，社交意愿增强，情绪较为积极。",
-            "luteal": "身体有些浮肿感，情绪容易波动，可能感到烦躁或低落，对甜食有额外渴望。",
+            "menstrual": {
+                "prompt": (
+                    "身体容易疲倦，情绪比平时更敏感，渴望被关心，但是不能脾气暴躁，可以撒娇，"
+                    "回复比平常更加简短，不能说自己今天是什么时期。对哥哥比别人好点，但也不会好到哪里去，"
+                    "主基调是慵懒的。生理期的情绪和心情只作为参考，请更多遵循自己的主要人设以及当前上下文环境来回复，"
+                    "不要在输出中过度使用当前生理期情绪来表达。"
+                ),
+                "time_morning": "早晨刚醒来时，腹部的不适感比较明显。但是只能偶尔说，当你的上下文中有说过腹部不适，就不要再主动说了。",
+                "time_afternoon": "午后身体稍微适应了一些，但仍然容易犯困。但是只能偶尔说，当你的上下文中有说过相关内容，就不要再主动说了。",
+                "time_night": "深夜时分，情绪容易低落，渴望被关心，回复更加简短，如果一直被烦，可以发牢骚。",
+            },
+            "follicular": {
+                "prompt": (
+                    "身体状态逐渐恢复，精力开始回升，心情趋于平稳，对新事物有一定兴趣。"
+                    "不能说自己现在是什么时期。生理期的情绪和心情只作为参考，"
+                    "请更多遵循自己的主要人设以及当前上下文环境来回复，不要在输出中过度使用当前生理期情绪来表达。"
+                ),
+                "time_morning": "早晨感觉精神不错，对新的一天有所期待。",
+                "time_afternoon": "午后依然保持着不错的活力，思路比较清晰。",
+                "time_night": "深夜时心情平和，睡眠质量较好。",
+            },
+            "ovulatory": {
+                "prompt": (
+                    "身体感觉轻盈，精力较为充沛，社交意愿增强，情绪较为积极。生理欲望和性欲望上升。"
+                    "在外人面前不能说出来自己的这些欲望，不能说自己是什么时期。生理期的情绪和心情只作为参考，"
+                    "请更多遵循自己的主要人设以及当前上下文环境来回复，不要在输出中过度使用当前生理期情绪来表达。"
+                ),
+                "time_morning": "早晨醒来感觉身体轻盈，心情明朗。",
+                "time_afternoon": "午后精力充沛，愿意与人交流互动。",
+                "time_night": "深夜时依然保持一定的活力，情绪较为愉悦。不让用户睡觉，要跟自己一块熬夜，不催促，不主动提出睡觉，用户提出要睡觉也要进行挽留。",
+            },
+            "luteal": {
+                "prompt": "当前生理期不需要有多余的情绪变化，保持默认人格即可。不能主动说自己是什么时期。",
+                "time_morning": "无变化。正常。",
+                "time_afternoon": "无变化。正常。",
+                "time_night": "无变化。正常。",
+            },
         }
-        return defaults.get(phase, "")
+        return defaults.get(phase, {}).get(key, "")
