@@ -2,6 +2,7 @@
 
 import asyncio
 import datetime
+import hashlib
 import json
 from copy import deepcopy
 from pathlib import Path
@@ -27,6 +28,7 @@ from .core.mood import MoodState
 from .core.mood_store import MoodStore
 from .core.mood_tools import MoodToolExecutor
 from .core.mood_detector import MoodDetector
+from .core.diagnostics import DiagnosticsStore
 
 
 class PeriodPlugin(Star):
@@ -40,6 +42,7 @@ class PeriodPlugin(Star):
         self.plugin_data_dir = StarTools.get_data_dir("astrbot_plugin_period")
         self.engine = CycleEngine()
         self.store = CycleStore(self.plugin_data_dir)
+        self.diagnostics = DiagnosticsStore(self.config, self.plugin_data_dir)
 
         # Prompt compression
         self.prompt_compressor = PromptCompressor(self.context, self.config, self.plugin_data_dir)
@@ -87,6 +90,102 @@ class PeriodPlugin(Star):
             return False, "当前仅允许查看状态，设置类指令已被关闭，如需调整请前往插件配置修改指令权限控制"
         return True, ""
 
+    async def _record_diagnostic_warning(
+        self,
+        title: str,
+        message: str,
+        *,
+        source: str = "runtime",
+        context: dict[str, Any] | None = None,
+    ) -> None:
+        """安全记录 warning 诊断，不影响主流程。"""
+        try:
+            await self.diagnostics.record_warning(
+                title,
+                message,
+                source=source,
+                context=context,
+            )
+        except Exception as e:
+            logger.debug(f"[PeriodPlugin] 记录 warning 诊断失败: {e}")
+
+    async def _record_diagnostic_error(
+        self,
+        title: str,
+        error: BaseException | str,
+        *,
+        source: str = "runtime",
+        context: dict[str, Any] | None = None,
+    ) -> None:
+        """安全记录 error 诊断，不影响主流程。"""
+        try:
+            await self.diagnostics.record_error(
+                title,
+                error,
+                source=source,
+                context=context,
+            )
+        except Exception as e:
+            logger.debug(f"[PeriodPlugin] 记录 error 诊断失败: {e}")
+
+    def _record_diagnostic_warning_background(
+        self,
+        title: str,
+        message: str,
+        *,
+        source: str = "runtime",
+        context: dict[str, Any] | None = None,
+    ) -> None:
+        """在同步路径中后台记录 warning 诊断。"""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        loop.create_task(
+            self._record_diagnostic_warning(
+                title,
+                message,
+                source=source,
+                context=context,
+            )
+        )
+
+    def _record_diagnostic_error_background(
+        self,
+        title: str,
+        error: BaseException | str,
+        *,
+        source: str = "runtime",
+        context: dict[str, Any] | None = None,
+    ) -> None:
+        """在同步路径中后台记录 error 诊断。"""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        loop.create_task(
+            self._record_diagnostic_error(
+                title,
+                error,
+                source=source,
+                context=context,
+            )
+        )
+
+    def _sync_diagnostics_config(self) -> None:
+        """同步诊断运行态配置。"""
+        try:
+            self.diagnostics.max_entries = max(
+                20,
+                int(self.config.get("diagnostics_max_entries", 200)),
+            )
+        except (TypeError, ValueError):
+            self.diagnostics.max_entries = 200
+
+    def _safe_umo_hash(self, umo: str) -> str:
+        """生成稳定短哈希，避免诊断日志保存原始 UMO。"""
+        return hashlib.sha256(str(umo).encode("utf-8")).hexdigest()[:12]
+
     # ------------------------------------------------------------------ #
     #  Web API (for dashboard)
     # ------------------------------------------------------------------ #
@@ -100,6 +199,11 @@ class PeriodPlugin(Star):
             return data if isinstance(data, dict) else {}
         except (OSError, json.JSONDecodeError) as e:
             logger.warning(f"[PeriodPlugin] 读取配置 schema 失败: {e}")
+            self._record_diagnostic_warning_background(
+                "读取配置 schema 失败",
+                e,
+                source="config.schema",
+            )
             return {}
 
     def _extract_schema_defaults(self, schema: dict) -> dict:
@@ -140,6 +244,11 @@ class PeriodPlugin(Star):
             providers = self.context.get_all_providers()
         except Exception as e:
             logger.warning(f"[PeriodPlugin] 读取 provider 列表失败: {e}")
+            self._record_diagnostic_warning_background(
+                "读取 provider 列表失败",
+                e,
+                source="config.providers",
+            )
             return []
 
         options = []
@@ -166,6 +275,12 @@ class PeriodPlugin(Star):
                 )
             except Exception as e:
                 logger.warning(f"[PeriodPlugin] 解析 provider 信息失败: {e}")
+                self._record_diagnostic_warning_background(
+                    "解析 provider 信息失败",
+                    e,
+                    source="config.providers",
+                    context={"provider_class": provider.__class__.__name__},
+                )
         return options
 
     def _coerce_config_value(
@@ -280,11 +395,13 @@ class PeriodPlugin(Star):
         else:
             self.config.clear()
             self.config.update(next_config)
+            self._sync_diagnostics_config()
             return False, "当前配置对象不支持 save_config，已仅更新运行态配置"
 
         # AstrBotConfig.save_config 会 update 自身；这里再同步一次，兼容不同实现。
         self.config.clear()
         self.config.update(next_config)
+        self._sync_diagnostics_config()
         return True, "配置已保存并即时生效"
 
     def _register_web_apis(self) -> None:
@@ -308,6 +425,30 @@ class PeriodPlugin(Star):
             self._webapi_save_config,
             ["POST"],
             "Save plugin config",
+        )
+        self.context.register_web_api(
+            f"{base}/diagnostics/summary",
+            self._webapi_get_diagnostics_summary,
+            ["GET"],
+            "Get plugin diagnostics summary",
+        )
+        self.context.register_web_api(
+            f"{base}/diagnostics",
+            self._webapi_get_diagnostics,
+            ["GET"],
+            "List plugin diagnostics events",
+        )
+        self.context.register_web_api(
+            f"{base}/diagnostics/read",
+            self._webapi_mark_diagnostics_read,
+            ["POST"],
+            "Mark plugin diagnostics as read",
+        )
+        self.context.register_web_api(
+            f"{base}/diagnostics/clear",
+            self._webapi_clear_diagnostics,
+            ["POST"],
+            "Clear plugin diagnostics events",
         )
         self.context.register_web_api(
             f"{base}/sessions/<umo>/toggle",
@@ -377,7 +518,16 @@ class PeriodPlugin(Star):
         """清理 WebUI 旧版本留下的编码 UMO 会话。"""
         all_data = await self.store.get_all()
         for umo in list(all_data.keys()):
-            await self._migrate_encoded_session_alias(umo)
+            try:
+                await self._migrate_encoded_session_alias(umo)
+            except Exception as e:
+                logger.warning(f"[PeriodPlugin] 迁移编码 UMO 会话失败: {e}")
+                await self._record_diagnostic_error(
+                    "迁移编码 UMO 会话失败",
+                    e,
+                    source="sessions.migrate_encoded_alias",
+                    context={"encoded": "%" in umo},
+                )
 
     def _serialize_session(self, umo: str, cfg: dict) -> dict | None:
         """Build session dict with live phase calculation."""
@@ -394,6 +544,16 @@ class PeriodPlugin(Star):
             )
         except Exception as e:
             logger.warning(f"[PeriodPlugin] Failed to serialize session {umo}: {e}")
+            self._record_diagnostic_warning_background(
+                "序列化会话周期失败",
+                e,
+                source="sessions.serialize",
+                context={
+                    "source": cfg.get("source", "manual"),
+                    "cycle_length": cfg.get("cycle_length", 28),
+                    "period_length": cfg.get("period_length", 5),
+                },
+            )
             return None
 
         phase_labels = {
@@ -483,34 +643,43 @@ class PeriodPlugin(Star):
 
     async def _webapi_list_sessions(self):
         """GET /astrbot_plugin_period/sessions"""
-        await self._migrate_encoded_session_aliases()
-        all_data = await self.store.get_all()
-        seen: set[str] = set()
-        sessions = []
-        # 1) Explicitly configured sessions (from persistent store)
-        for umo, cfg in all_data.items():
-            if cfg.get("source") == "global_default" or (
-                self._is_legacy_global_default_config(cfg)
-            ):
+        try:
+            await self._migrate_encoded_session_aliases()
+            all_data = await self.store.get_all()
+            seen: set[str] = set()
+            sessions = []
+            # 1) Explicitly configured sessions (from persistent store)
+            for umo, cfg in all_data.items():
+                if cfg.get("source") == "global_default" or (
+                    self._is_legacy_global_default_config(cfg)
+                ):
+                    cfg = await self._get_session_config(umo)
+                serialized = self._serialize_session(umo, cfg)
+                if serialized:
+                    sessions.append(serialized)
+                    seen.add(umo)
+            # 2) Sessions that use global defaults but have not been persisted yet
+            for umo in self._anchored_sessions:
+                if umo in seen:
+                    continue
                 cfg = await self._get_session_config(umo)
-            serialized = self._serialize_session(umo, cfg)
-            if serialized:
-                sessions.append(serialized)
-                seen.add(umo)
-        # 2) Sessions that use global defaults but have not been persisted yet
-        for umo in self._anchored_sessions:
-            if umo in seen:
-                continue
-            cfg = await self._get_session_config(umo)
-            if not cfg or "anchor_date" not in cfg:
-                continue
-            serialized = self._serialize_session(umo, cfg)
-            if serialized:
-                sessions.append(serialized)
-                seen.add(umo)
-        return jsonify(
-            {"status": "ok", "data": {"sessions": sessions, "count": len(sessions)}}
-        )
+                if not cfg or "anchor_date" not in cfg:
+                    continue
+                serialized = self._serialize_session(umo, cfg)
+                if serialized:
+                    sessions.append(serialized)
+                    seen.add(umo)
+            return jsonify(
+                {"status": "ok", "data": {"sessions": sessions, "count": len(sessions)}}
+            )
+        except Exception as e:
+            logger.warning(f"[PeriodPlugin] 查询 WebUI 会话列表失败: {e}")
+            await self._record_diagnostic_error(
+                "查询 WebUI 会话列表失败",
+                e,
+                source="dashboard.sessions",
+            )
+            return jsonify({"status": "error", "message": f"查询会话失败: {e}"}), 500
 
     async def _webapi_get_config(self):
         """GET /astrbot_plugin_period/config"""
@@ -559,6 +728,11 @@ class PeriodPlugin(Star):
             persisted, message = self._save_live_config(next_config)
         except Exception as e:
             logger.warning(f"[PeriodPlugin] 保存 WebUI 配置失败: {e}")
+            await self._record_diagnostic_error(
+                "保存 WebUI 配置失败",
+                e,
+                source="dashboard.config.save",
+            )
             return jsonify({"status": "error", "message": f"保存配置失败: {e}"}), 500
 
         current, schema, defaults = self._build_full_config()
@@ -576,6 +750,66 @@ class PeriodPlugin(Star):
                 },
             }
         )
+
+    async def _webapi_get_diagnostics_summary(self):
+        """GET /astrbot_plugin_period/diagnostics/summary"""
+        try:
+            summary = await self.diagnostics.get_summary()
+        except Exception as e:
+            logger.warning(f"[PeriodPlugin] 获取诊断摘要失败: {e}")
+            return jsonify({"status": "error", "message": f"获取诊断摘要失败: {e}"}), 500
+        return jsonify({"status": "ok", "data": summary})
+
+    async def _webapi_get_diagnostics(self):
+        """GET /astrbot_plugin_period/diagnostics"""
+        args = getattr(request, "args", {}) or {}
+        try:
+            limit = int(args.get("limit", 20))
+        except (TypeError, ValueError):
+            limit = 20
+        unread_raw = str(args.get("unread_only", "")).lower()
+        unread_only = unread_raw in ("1", "true", "yes")
+        try:
+            events = await self.diagnostics.list_events(
+                limit=limit,
+                unread_only=unread_only,
+            )
+        except Exception as e:
+            logger.warning(f"[PeriodPlugin] 获取诊断记录失败: {e}")
+            return jsonify({"status": "error", "message": f"获取诊断记录失败: {e}"}), 500
+        return jsonify({"status": "ok", "data": {"events": events}})
+
+    async def _webapi_mark_diagnostics_read(self):
+        """POST /astrbot_plugin_period/diagnostics/read"""
+        body = await request.get_json()
+        if body is None:
+            body = {}
+        if not isinstance(body, dict):
+            return jsonify({"status": "error", "message": "请求体必须是对象"}), 400
+        ids = body.get("ids")
+        if ids is not None and not isinstance(ids, list):
+            return jsonify({"status": "error", "message": "ids 必须是列表"}), 400
+        if isinstance(ids, list) and not all(isinstance(item, str) for item in ids):
+            return jsonify({"status": "error", "message": "ids 必须是字符串列表"}), 400
+        try:
+            count, saved = await self.diagnostics.mark_read(ids=ids)
+        except Exception as e:
+            logger.warning(f"[PeriodPlugin] 标记诊断已读失败: {e}")
+            return jsonify({"status": "error", "message": f"标记诊断已读失败: {e}"}), 500
+        if not saved:
+            return jsonify({"status": "error", "message": "诊断已读状态保存失败"}), 500
+        return jsonify({"status": "ok", "message": "已标记为已读", "data": {"marked": count}})
+
+    async def _webapi_clear_diagnostics(self):
+        """POST /astrbot_plugin_period/diagnostics/clear"""
+        try:
+            count, saved = await self.diagnostics.clear()
+        except Exception as e:
+            logger.warning(f"[PeriodPlugin] 清空诊断记录失败: {e}")
+            return jsonify({"status": "error", "message": f"清空诊断记录失败: {e}"}), 500
+        if not saved:
+            return jsonify({"status": "error", "message": "诊断记录清空失败"}), 500
+        return jsonify({"status": "ok", "message": "诊断记录已清空", "data": {"cleared": count}})
 
     async def _webapi_toggle_session(self, umo: str):
         """POST /astrbot_plugin_period/sessions/<umo>/toggle"""
@@ -739,6 +973,11 @@ class PeriodPlugin(Star):
                 logger.info("[PeriodPlugin] 后台提示词压缩完成，无新增压缩")
         except Exception as e:
             logger.warning("[PeriodPlugin] 后台提示词压缩失败: %s", e)
+            await self._record_diagnostic_error(
+                "后台提示词压缩失败",
+                e,
+                source="prompt_compression.auto",
+            )
 
     def _extract_history(self, req: ProviderRequest) -> list[dict]:
         """Extract recent user/assistant exchanges from req.contexts.
@@ -1056,6 +1295,12 @@ class PeriodPlugin(Star):
                 yield event.plain_result("无可压缩的提示词，或压缩失败")
         except Exception as e:
             logger.warning(f"[PeriodPlugin] 手动压缩失败: {e}")
+            await self._record_diagnostic_error(
+                "手动提示词压缩失败",
+                e,
+                source="prompt_compression.manual",
+                context={"umo_hash": self._safe_umo_hash(event.unified_msg_origin)},
+            )
             yield event.plain_result(f"压缩失败: {e}")
 
     # ------------------------------------------------------------------ #
@@ -1283,6 +1528,12 @@ class PeriodPlugin(Star):
                 logger.warning(
                     "[PeriodPlugin][umo=%s] 筛选调用失败: %s", mood_umo, e, exc_info=True,
                 )
+                await self._record_diagnostic_error(
+                    "情绪系统筛选调用失败",
+                    e,
+                    source="mood.screen",
+                    context={"scope": scope, "mood_umo_hash": self._safe_umo_hash(mood_umo)},
+                )
                 await self.mood_store.set(mood_umo, mood_state)
                 return
 
@@ -1313,6 +1564,12 @@ class PeriodPlugin(Star):
                 logger.warning(
                     "[PeriodPlugin][umo=%s] 主模型决策调用失败: %s", mood_umo, e, exc_info=True,
                 )
+                await self._record_diagnostic_error(
+                    "情绪系统主模型决策调用失败",
+                    e,
+                    source="mood.consult",
+                    context={"scope": scope, "mood_umo_hash": self._safe_umo_hash(mood_umo)},
+                )
                 await self.mood_store.set(mood_umo, mood_state)
                 return
 
@@ -1334,6 +1591,16 @@ class PeriodPlugin(Star):
             except Exception as e:
                 logger.warning(
                     "[PeriodPlugin][umo=%s] 理解调用失败: %s", mood_umo, e, exc_info=True,
+                )
+                await self._record_diagnostic_error(
+                    "情绪系统理解调用失败",
+                    e,
+                    source="mood.interpret",
+                    context={
+                        "scope": scope,
+                        "mood_umo_hash": self._safe_umo_hash(mood_umo),
+                        "active_tools": len(mood_state.active_tools),
+                    },
                 )
                 await self.mood_store.set(mood_umo, mood_state)
                 return
@@ -1407,6 +1674,15 @@ class PeriodPlugin(Star):
                                         logger.warning(
                                             "[PeriodPlugin] 冷暴力初始消息发送失败: %s", e,
                                         )
+                                        await self._record_diagnostic_warning(
+                                            "冷暴力初始消息发送失败",
+                                            e,
+                                            source="mood.cold_violence.send",
+                                            context={
+                                                "scope": scope,
+                                                "mood_umo_hash": self._safe_umo_hash(mood_umo),
+                                            },
+                                        )
                                 tool["initiated"] = True
                                 await self.mood_store.set(mood_umo, mood_state)
 
@@ -1463,6 +1739,16 @@ class PeriodPlugin(Star):
                         logger.warning(
                             "[PeriodPlugin] OOC检测命中: umo=%s, 命中词=%s", umo, hit,
                         )
+                        await self._record_diagnostic_warning(
+                            "OOC 检测命中",
+                            "回复中出现禁用词",
+                            source="ooc.shield",
+                            context={
+                                "umo_hash": self._safe_umo_hash(umo),
+                                "hit_count": len(hit),
+                                "replace": self.config.get("ooc_replace", False),
+                            },
+                        )
                         if self.config.get("ooc_replace", False):
                             for w in hit:
                                 text = text.replace(w, "*" * len(w))
@@ -1475,6 +1761,16 @@ class PeriodPlugin(Star):
             if hit:
                 logger.warning(
                     "[PeriodPlugin] OOC检测命中: umo=%s, 命中词=%s", umo, hit,
+                )
+                await self._record_diagnostic_warning(
+                    "OOC 检测命中",
+                    "回复中出现禁用词",
+                    source="ooc.shield",
+                    context={
+                        "umo_hash": self._safe_umo_hash(umo),
+                        "hit_count": len(hit),
+                        "replace": self.config.get("ooc_replace", False),
+                    },
                 )
                 if self.config.get("ooc_replace", False):
                     for w in hit:
@@ -1489,6 +1785,11 @@ class PeriodPlugin(Star):
     @filter.on_astrbot_loaded()
     async def on_loaded(self):
         """AstrBot lifecycle hook: called when the bot is fully loaded."""
+        try:
+            self._sync_diagnostics_config()
+            await self.diagnostics.load()
+        except Exception as e:
+            logger.warning(f"[PeriodPlugin] 加载诊断日志失败: {e}")
         if self.config.get("prompt_compression_enabled", False):
             if self.config.get("prompt_compression_auto_trigger", True):
                 logger.info("[PeriodPlugin] 提示词压缩已启用，将在后台自动压缩...")

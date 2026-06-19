@@ -3,7 +3,7 @@
 import sys
 from copy import deepcopy
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 # Add parent dir so astrbot_plugin_period is importable as a package
 _parent = Path(__file__).parent.parent.parent
@@ -641,6 +641,18 @@ async def test_webapi_save_config_without_save_config_updates_memory(tmp_path, s
 
 
 @pytest.mark.asyncio
+async def test_webapi_save_config_updates_diagnostics_runtime_config(webui_plugin):
+    request.set_json({"config": {"diagnostics_max_entries": 25}})
+
+    result, status = _unwrap(await webui_plugin._webapi_save_config())
+
+    assert status == 200
+    assert result["status"] == "ok"
+    assert webui_plugin.config["diagnostics_max_entries"] == 25
+    assert webui_plugin.diagnostics.max_entries == 25
+
+
+@pytest.mark.asyncio
 async def test_webapi_save_config_rejects_invalid_values(webui_plugin):
     request.set_json({
         "config": {
@@ -682,6 +694,74 @@ async def test_webapi_save_config_rejects_non_object(webui_plugin):
     result, status = _unwrap(await webui_plugin._webapi_save_config())
 
     assert status == 400
+    assert result["status"] == "error"
+
+
+# --------------------------------------------------------------------------- #
+#  Diagnostics Web API
+# --------------------------------------------------------------------------- #
+
+@pytest.mark.asyncio
+async def test_webapi_diagnostics_summary_list_read_and_clear(webui_plugin):
+    await webui_plugin.diagnostics.record_warning(
+        "配置提醒",
+        "warning detail",
+        source="config",
+    )
+    await webui_plugin.diagnostics.record_error(
+        "运行错误",
+        RuntimeError("boom"),
+        source="runtime",
+    )
+
+    result, status = _unwrap(await webui_plugin._webapi_get_diagnostics_summary())
+    assert status == 200
+    assert result["status"] == "ok"
+    assert result["data"]["status"] == "error"
+    assert result["data"]["unread_count"] == 2
+
+    result, status = _unwrap(await webui_plugin._webapi_get_diagnostics())
+    assert status == 200
+    assert result["status"] == "ok"
+    events = result["data"]["events"]
+    assert [event["level"] for event in events] == ["error", "warning"]
+
+    request.set_json({"ids": [events[0]["id"]]})
+    result, status = _unwrap(await webui_plugin._webapi_mark_diagnostics_read())
+    assert status == 200
+    assert result["data"]["marked"] == 1
+
+    request.set_json({"ids": "bad"})
+    result, status = _unwrap(await webui_plugin._webapi_mark_diagnostics_read())
+    assert status == 400
+    assert result["status"] == "error"
+
+    request.set_json([])
+    result, status = _unwrap(await webui_plugin._webapi_mark_diagnostics_read())
+    assert status == 400
+    assert result["status"] == "error"
+
+    result, status = _unwrap(await webui_plugin._webapi_clear_diagnostics())
+    assert status == 200
+    assert result["data"]["cleared"] == 2
+    assert await webui_plugin.diagnostics.list_events() == []
+
+
+@pytest.mark.asyncio
+async def test_webapi_diagnostics_store_failures_return_error(webui_plugin):
+    webui_plugin.diagnostics.mark_read = AsyncMock(side_effect=RuntimeError("disk down"))
+    request.set_json({})
+
+    result, status = _unwrap(await webui_plugin._webapi_mark_diagnostics_read())
+
+    assert status == 500
+    assert result["status"] == "error"
+
+    webui_plugin.diagnostics.clear = AsyncMock(side_effect=RuntimeError("disk down"))
+
+    result, status = _unwrap(await webui_plugin._webapi_clear_diagnostics())
+
+    assert status == 500
     assert result["status"] == "error"
 
 
@@ -1000,6 +1080,10 @@ def test_webapi_routes_registered(webui_plugin):
     assert (f"{base}/sessions", ("GET",)) in routes
     assert (f"{base}/config", ("GET",)) in routes
     assert (f"{base}/config", ("POST",)) in routes
+    assert (f"{base}/diagnostics/summary", ("GET",)) in routes
+    assert (f"{base}/diagnostics", ("GET",)) in routes
+    assert (f"{base}/diagnostics/read", ("POST",)) in routes
+    assert (f"{base}/diagnostics/clear", ("POST",)) in routes
     assert (f"{base}/sessions/<umo>/toggle", ("POST",)) in routes
     assert (f"{base}/sessions/<umo>/advance", ("POST",)) in routes
     assert (f"{base}/sessions/<umo>/anchor", ("POST",)) in routes
@@ -1016,6 +1100,7 @@ def test_dashboard_uses_full_config_editor_and_svg_icons():
     assert "AstrBotPluginPage.apiPost('config'" in html
     assert "tag-editor" in html
     assert "<symbol id=\"icon-calendar\"" in html
+    assert "<symbol id=\"icon-activity\"" in html
     assert "📋" not in html
     for char in html:
         codepoint = ord(char)
@@ -1034,6 +1119,7 @@ def test_dashboard_declares_all_primary_setting_groups():
         "forbidden_words",
         "mood_detector_provider_id",
         "prompt_compression_ratio",
+        "diagnostics_max_entries",
     ):
         assert field in html
 
@@ -1102,6 +1188,26 @@ def test_dashboard_session_actions_avoid_encoded_umo_and_native_confirm():
     assert "modal-confirm" in html
     assert "function showConfirm" in html
     assert "resolveConfirm(false)" in html
+
+
+def test_dashboard_declares_diagnostics_panel_and_api_calls():
+    html = _dashboard_html()
+
+    assert "diagnostics-widget" in html
+    assert "diagnostics-panel" in html
+    assert "diagnostics-dot" in html
+    assert "function loadDiagnosticsSummary" in html
+    assert "function loadDiagnosticsEvents" in html
+    assert "function renderDiagnosticsSummary" in html
+    assert "function renderDiagnosticsEvents" in html
+    assert "function toggleDiagnosticsPanel" in html
+    assert "function markDiagnosticsRead" in html
+    assert "function clearDiagnostics" in html
+    assert "AstrBotPluginPage.apiGet('diagnostics/summary')" in html
+    assert "AstrBotPluginPage.apiGet('diagnostics', { limit: 20 })" in html
+    assert "AstrBotPluginPage.apiPost('diagnostics/read', {})" in html
+    assert "AstrBotPluginPage.apiPost('diagnostics/clear', {})" in html
+    assert "setInterval(loadDiagnosticsSummary, 30000)" in html
 
 
 def test_dashboard_normalizes_wrapped_and_unwrapped_bridge_responses():

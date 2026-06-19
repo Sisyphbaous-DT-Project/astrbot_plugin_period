@@ -328,5 +328,13 @@
     "min": 10,
     "max": 80,
     "condition": { "prompt_compression_enabled": true }
+  },
+
+  "diagnostics_max_entries": {
+    "type": "int",
+    "description": "诊断日志最多保留条数",
+    "hint": "WebUI 右上角诊断面板会显示插件自身的 warning/error。这里只控制后台最多保存多少条诊断记录，默认 200 条。",
+    "default": 200,
+    "min": 20
   }
 }

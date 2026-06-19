@@ -125,6 +125,184 @@
       gap: 8px;
       flex-wrap: wrap;
     }
+    .diagnostics-widget {
+      position: relative;
+      z-index: 50;
+    }
+    .diagnostics-button {
+      position: relative;
+      width: 36px;
+      min-height: 36px;
+      padding: 0;
+    }
+    .diagnostics-button.status-warning { color: var(--warning); }
+    .diagnostics-button.status-error { color: var(--danger); }
+    .diagnostics-dot {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      display: none;
+      min-width: 17px;
+      height: 17px;
+      padding: 0 5px;
+      border-radius: 999px;
+      border: 2px solid #fff;
+      background: var(--danger);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 900;
+      line-height: 13px;
+      text-align: center;
+    }
+    .diagnostics-dot:not(:empty) { display: block; }
+    .diagnostics-button.status-warning .diagnostics-dot {
+      background: var(--warning);
+    }
+    .diagnostics-panel {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      display: none;
+      width: min(440px, calc(100vw - 48px));
+      max-height: 620px;
+      overflow: hidden;
+      border: 1px solid var(--line-soft);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.98);
+      box-shadow: var(--shadow-lift);
+      backdrop-filter: blur(18px);
+    }
+    .diagnostics-panel.show { display: block; animation: panelEnter 0.18s ease-out both; }
+    .diagnostics-panel-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 15px 16px 12px;
+      border-bottom: 1px solid var(--line-soft);
+      background: var(--paper-soft);
+    }
+    .diagnostics-title {
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 950;
+    }
+    .diagnostics-subtitle {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .diagnostics-close {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .diagnostics-close:hover { color: var(--ink); }
+    .diagnostics-list {
+      max-height: 420px;
+      overflow-y: auto;
+      padding: 10px;
+      background: #fff;
+    }
+    .diagnostics-empty {
+      min-height: 120px;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      text-align: center;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .diagnostics-empty.error { color: var(--danger); }
+    .diagnostics-item {
+      padding: 12px;
+      border: 1px solid var(--line-soft);
+      border-radius: 8px;
+      background: #fff;
+    }
+    .diagnostics-item + .diagnostics-item { margin-top: 8px; }
+    .diagnostics-item.unread {
+      border-color: rgba(180, 35, 24, 0.24);
+      background: var(--danger-soft);
+    }
+    .diagnostics-item.warning.unread {
+      border-color: rgba(95, 95, 99, 0.24);
+      background: var(--warning-soft);
+    }
+    .diagnostics-item-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .diagnostics-level {
+      padding: 3px 7px;
+      border-radius: 6px;
+      background: var(--danger);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 950;
+      line-height: 1.1;
+      text-transform: uppercase;
+    }
+    .diagnostics-item.warning .diagnostics-level {
+      background: var(--ink);
+    }
+    .diagnostics-time,
+    .diagnostics-source {
+      color: var(--muted-2);
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .diagnostics-item-title {
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 950;
+      overflow-wrap: anywhere;
+    }
+    .diagnostics-item-message {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+      line-height: 1.55;
+      overflow-wrap: anywhere;
+    }
+    .diagnostics-source { margin-top: 7px; }
+    .diagnostics-context {
+      margin-top: 9px;
+      padding: 8px;
+      border-radius: 7px;
+      background: var(--paper-soft);
+      border: 1px solid var(--line-soft);
+    }
+    .diagnostics-context-item {
+      display: grid;
+      grid-template-columns: 104px minmax(0, 1fr);
+      gap: 8px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .diagnostics-context-item + .diagnostics-context-item { margin-top: 5px; }
+    .diagnostics-context-item code {
+      overflow: hidden;
+      color: var(--ink);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .diagnostics-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 12px 16px 15px;
+      border-top: 1px solid var(--line-soft);
+      background: var(--paper-soft);
+    }
     .btn {
       display: inline-flex;
       align-items: center;
@@ -772,6 +950,12 @@
       .topbar { align-items: flex-start; flex-direction: column; padding: 14px; }
       .toolbar { justify-content: stretch; }
       .toolbar .btn { flex: 1 1 auto; }
+      .diagnostics-widget { flex: 0 0 auto; }
+      .diagnostics-panel {
+        right: auto;
+        left: 0;
+        width: calc(100vw - 24px);
+      }
       .summary-grid { grid-template-columns: 1fr; }
       .settings-layout { grid-template-columns: 1fr; }
       .settings-nav {
@@ -818,6 +1002,7 @@
     <symbol id="icon-list" viewBox="0 0 24 24"><path d="M8 6h13"></path><path d="M8 12h13"></path><path d="M8 18h13"></path><path d="M3 6h.01"></path><path d="M3 12h.01"></path><path d="M3 18h.01"></path></symbol>
     <symbol id="icon-power" viewBox="0 0 24 24"><path d="M12 2v10"></path><path d="M18.4 6.6a9 9 0 1 1-12.8 0"></path></symbol>
     <symbol id="icon-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></symbol>
+    <symbol id="icon-activity" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></symbol>
     <symbol id="icon-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"></path></symbol>
     <symbol id="icon-check" viewBox="0 0 24 24"><path d="m20 6-11 11-5-5"></path></symbol>
   </svg>
@@ -837,6 +1022,30 @@
         </div>
       </div>
       <div class="toolbar">
+        <div class="diagnostics-widget" id="diagnostics-widget">
+          <button class="btn btn-secondary diagnostics-button" id="btn-diagnostics" type="button" aria-label="插件诊断状态" title="插件诊断">
+            <svg class="icon"><use href="#icon-activity"></use></svg>
+            <span class="diagnostics-dot" id="diagnostics-dot"></span>
+          </button>
+          <div class="diagnostics-panel" id="diagnostics-panel">
+            <div class="diagnostics-panel-header">
+              <div>
+                <div class="diagnostics-title">插件诊断</div>
+                <div class="diagnostics-subtitle" id="diagnostics-summary-text">正在加载...</div>
+              </div>
+              <button class="diagnostics-close" id="btn-diagnostics-close" type="button" aria-label="关闭诊断面板">
+                <svg class="icon"><use href="#icon-x"></use></svg>
+              </button>
+            </div>
+            <div class="diagnostics-list" id="diagnostics-list">
+              <div class="diagnostics-empty">暂无诊断记录</div>
+            </div>
+            <div class="diagnostics-actions">
+              <button class="btn btn-secondary btn-sm" id="btn-diagnostics-read" type="button">标记已读</button>
+              <button class="btn btn-danger btn-sm" id="btn-diagnostics-clear" type="button">清空</button>
+            </div>
+          </div>
+        </div>
         <button class="btn btn-secondary" id="btn-refresh" type="button">
           <svg class="icon"><use href="#icon-refresh"></use></svg>
           <span>刷新</span>
@@ -969,6 +1178,7 @@
       { id: 'scope', title: '生效范围', icon: 'shield', desc: '全局注入、白名单和黑名单范围。', fields: ['global_inject', 'umo_mode', 'umo_list'] },
       { id: 'mood', title: '情绪系统', icon: 'heart', desc: '情绪工具、模型选择与高级提示词。', fields: ['mood_system_enabled', 'mood_scope', 'mood_history_length', 'cold_violence_behavior', 'enable_cold_violence', 'enable_read_no_reply', 'enable_perfunctory_reply', 'enable_seek_comfort', 'enable_delayed_reply', 'enable_emotional_outburst', 'enable_topic_shift', 'mood_detector_provider_id', 'mood_detector_read_system_prompt', 'mood_detector_system_prompt_max_length', 'mood_detector_screen_prompt', 'mood_detector_consult_prompt', 'mood_detector_interpret_prompt'] },
       { id: 'compression', title: '提示词压缩', icon: 'compress', desc: '启动压缩、自动触发和压缩比例。', fields: ['prompt_compression_enabled', 'prompt_compression_auto_trigger', 'prompt_compression_ratio'] },
+      { id: 'diagnostics', title: '插件诊断', icon: 'activity', desc: '插件自身 warning/error 收集与保存数量。', fields: ['diagnostics_max_entries'] },
     ];
 
     const OPTION_LABELS = {
@@ -1015,6 +1225,10 @@
     let moodWarningLastFocus = null;
     let confirmResolver = null;
     let confirmLastFocus = null;
+    let diagnosticsSummary = {};
+    let diagnosticsEvents = [];
+    let diagnosticsPanelOpen = false;
+    let diagnosticsTimer = null;
 
     const $ = (id) => document.getElementById(id);
 
@@ -1033,6 +1247,10 @@
         await AstrBotPluginPage.ready();
         bridgeReady = true;
         await loadData();
+        await loadDiagnosticsSummary();
+        if (!diagnosticsTimer) {
+          diagnosticsTimer = setInterval(loadDiagnosticsSummary, 30000);
+        }
       } catch (e) {
         showMessage('Bridge SDK 初始化失败: ' + e.message, 'error');
       }
@@ -1048,6 +1266,10 @@
       });
       $('btn-save').addEventListener('click', saveConfig);
       $('btn-save-inline').addEventListener('click', saveConfig);
+      $('btn-diagnostics').addEventListener('click', toggleDiagnosticsPanel);
+      $('btn-diagnostics-close').addEventListener('click', closeDiagnosticsPanel);
+      $('btn-diagnostics-read').addEventListener('click', markDiagnosticsRead);
+      $('btn-diagnostics-clear').addEventListener('click', clearDiagnostics);
       $('btn-modal-cancel').addEventListener('click', closeModal);
       $('btn-modal-confirm').addEventListener('click', confirmAnchor);
       $('btn-mood-warning-cancel').addEventListener('click', () => resolveMoodWarning(false));
@@ -1062,6 +1284,12 @@
       });
       $('modal-confirm').addEventListener('click', (event) => {
         if (event.target === $('modal-confirm')) resolveConfirm(false);
+      });
+      document.addEventListener('click', (event) => {
+        const widget = $('diagnostics-widget');
+        if (diagnosticsPanelOpen && widget && !widget.contains(event.target)) {
+          closeDiagnosticsPanel();
+        }
       });
       document.addEventListener('click', handleClick);
       document.addEventListener('input', handleInput);
@@ -1113,6 +1341,27 @@
       return response;
     }
 
+    async function loadDiagnosticsSummary() {
+      if (!bridgeReady) return;
+      try {
+        diagnosticsSummary = unwrapApiData(await AstrBotPluginPage.apiGet('diagnostics/summary'));
+        renderDiagnosticsSummary();
+      } catch (e) {
+        diagnosticsSummary = { status: 'error', unread_count: 0 };
+        renderDiagnosticsSummary('诊断状态读取失败');
+      }
+    }
+
+    async function loadDiagnosticsEvents() {
+      try {
+        diagnosticsEvents = unwrapApiData(await AstrBotPluginPage.apiGet('diagnostics', { limit: 20 })).events || [];
+        renderDiagnosticsEvents();
+      } catch (e) {
+        diagnosticsEvents = [];
+        renderDiagnosticsEvents('加载诊断记录失败: ' + (e.message || '未知错误'));
+      }
+    }
+
     function renderAll() {
       renderSummary();
       renderSettingsNav();
@@ -1147,6 +1396,68 @@
     function syncTopbarStatus() {
       setText('topbar-sync-state', dirty ? 'Unsaved Edits' : '已同步');
       setText('topbar-session-count', `${currentSessions.length} Sessions`);
+    }
+
+    function renderDiagnosticsSummary(errorText) {
+      const button = $('btn-diagnostics');
+      const dot = $('diagnostics-dot');
+      const summaryText = $('diagnostics-summary-text');
+      if (!button || !dot || !summaryText) return;
+
+      const status = errorText ? 'error' : (diagnosticsSummary.status || 'ok');
+      const unreadErrors = diagnosticsSummary.unread_error_count || 0;
+      const unreadWarnings = diagnosticsSummary.unread_warning_count || 0;
+      const unreadTotal = diagnosticsSummary.unread_count ?? (unreadErrors + unreadWarnings);
+
+      button.classList.remove('status-ok', 'status-warning', 'status-error');
+      button.classList.add(`status-${status}`);
+      dot.textContent = unreadTotal > 0 ? String(Math.min(unreadTotal, 99)) : '';
+
+      if (errorText) {
+        summaryText.textContent = errorText;
+      } else if (status === 'error') {
+        summaryText.textContent = `${unreadErrors} 条未读错误，${unreadWarnings} 条未读警告`;
+      } else if (status === 'warning') {
+        summaryText.textContent = `${unreadWarnings} 条未读警告`;
+      } else {
+        summaryText.textContent = `插件运行状态正常，共 ${diagnosticsSummary.total || 0} 条记录`;
+      }
+    }
+
+    function renderDiagnosticsEvents(errorText) {
+      const list = $('diagnostics-list');
+      if (!list) return;
+      if (errorText) {
+        list.innerHTML = `<div class="diagnostics-empty error">${escapeHtml(errorText)}</div>`;
+        return;
+      }
+      if (!diagnosticsEvents.length) {
+        list.innerHTML = '<div class="diagnostics-empty">暂无诊断记录</div>';
+        return;
+      }
+      list.innerHTML = diagnosticsEvents.map(event => {
+        const level = event.level === 'error' ? 'error' : 'warning';
+        const context = event.context && typeof event.context === 'object'
+          ? Object.entries(event.context).slice(0, 5).map(([key, value]) => `
+            <div class="diagnostics-context-item">
+              <span>${escapeHtml(key)}</span>
+              <code>${escapeHtml(String(value))}</code>
+            </div>
+          `).join('')
+          : '';
+        return `
+          <div class="diagnostics-item ${level}${event.unread ? ' unread' : ''}">
+            <div class="diagnostics-item-top">
+              <span class="diagnostics-level">${escapeHtml(level)}</span>
+              <span class="diagnostics-time">${formatDateTime(event.created_at)}</span>
+            </div>
+            <div class="diagnostics-item-title">${escapeHtml(event.title || '插件诊断')}</div>
+            <div class="diagnostics-item-message">${escapeHtml(event.message || '')}</div>
+            <div class="diagnostics-source">${escapeHtml(event.source || 'runtime')}</div>
+            ${context ? `<div class="diagnostics-context">${context}</div>` : ''}
+          </div>
+        `;
+      }).join('');
     }
 
     function setText(id, text) {
@@ -1430,6 +1741,8 @@
     }
 
     function handleClick(event) {
+      if (event.target.closest('#diagnostics-widget')) return;
+
       const trigger = event.target.closest('[data-select] .select-trigger');
       if (trigger) {
         event.preventDefault();
@@ -1578,6 +1891,11 @@
           resolveConfirm(false);
           return;
         }
+      }
+      if (diagnosticsPanelOpen && event.key === 'Escape') {
+        event.preventDefault();
+        closeDiagnosticsPanel();
+        return;
       }
       if (event.key !== 'Enter') return;
       const input = event.target.closest('.tag-input');
@@ -1802,6 +2120,49 @@
       }
     }
 
+    async function toggleDiagnosticsPanel(event) {
+      if (event) event.stopPropagation();
+      if (diagnosticsPanelOpen) {
+        closeDiagnosticsPanel();
+        return;
+      }
+      diagnosticsPanelOpen = true;
+      $('diagnostics-panel').classList.add('show');
+      await loadDiagnosticsEvents();
+    }
+
+    function closeDiagnosticsPanel() {
+      diagnosticsPanelOpen = false;
+      $('diagnostics-panel').classList.remove('show');
+    }
+
+    async function markDiagnosticsRead() {
+      try {
+        await AstrBotPluginPage.apiPost('diagnostics/read', {});
+        await loadDiagnosticsSummary();
+        await loadDiagnosticsEvents();
+      } catch (e) {
+        showMessage('标记诊断已读失败: ' + e.message, 'error');
+      }
+    }
+
+    async function clearDiagnostics() {
+      const accepted = await showConfirm({
+        title: '清空插件诊断',
+        message: '确定要清空所有插件诊断记录吗？此操作不可恢复。',
+        confirmText: '清空',
+      });
+      if (!accepted) return;
+      try {
+        await AstrBotPluginPage.apiPost('diagnostics/clear', {});
+        diagnosticsEvents = [];
+        await loadDiagnosticsSummary();
+        renderDiagnosticsEvents();
+      } catch (e) {
+        showMessage('清空诊断失败: ' + e.message, 'error');
+      }
+    }
+
     function emptyState(iconName, text) {
       return `
         <div class="empty">
@@ -1940,6 +2301,18 @@
     function optionLabel(path, value) {
       const key = path.split('.').pop();
       return OPTION_LABELS[key]?.[value] || OPTION_LABELS[path]?.[value] || value;
+    }
+
+    function formatDateTime(value) {
+      if (!value) return '';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return String(value);
+      return date.toLocaleString('zh-CN', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
     }
 
     function cleanText(text) {
