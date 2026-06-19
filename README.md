@@ -240,7 +240,7 @@ https://github.com/Sisyphbaous-DT-Project/astrbot_plugin_period
 
 ### 打开方式
 
-Dashboard → 扩展 → 已安装插件 → **棉絮与铁（Period）** → **周期管理面板**
+Dashboard → 扩展 → 已安装插件 → **棉絮与铁（Period）** → **Period**
 
 ### 面板功能
 
@@ -521,7 +521,7 @@ v2.1 的解决方案：让**主模型**自己决定心情和工具。主模型�
 
 ## 插件配置
 
-在 AstrBot 的**插件管理 → 棉絮与铁 → 配置**中，可以使用 AstrBot 原生配置页编辑；在**周期管理面板**中，可以使用本插件提供的分组 WebUI 编辑并保存全部配置。
+在 AstrBot 的**插件管理 → 棉絮与铁 → 配置**中，可以使用 AstrBot 原生配置页编辑；在 **Period** 面板中，可以使用本插件提供的分组 WebUI 编辑并保存全部配置。
 
 ### 身体感知相关
 

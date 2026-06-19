@@ -998,7 +998,9 @@ def test_dashboard_keeps_editorial_theme_without_hero():
     html = _dashboard_html()
 
     assert "class=\"topbar\"" in html
-    assert "Issue 02 / Cycle Atelier" in html
+    assert "<h1>Period</h1>" in html
+    assert "Cycle Intelligence · Prompt Atelier · Session Control" in html
+    assert "Issue 03 / Period Studio" in html
     assert "topbar-sync-state" in html
     assert "function syncTopbarStatus" in html
     assert "@media (prefers-reduced-motion: reduce)" in html

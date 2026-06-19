@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>周期管理面板</title>
+  <title>Period</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -72,16 +72,21 @@
       flex: 0 0 auto;
     }
     h1 {
-      font-size: 24px;
-      line-height: 1.1;
+      font-family: "SF Pro Display", "Segoe UI Variable Display", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 34px;
+      line-height: 0.92;
       font-weight: 950;
       letter-spacing: 0;
+      color: var(--ink);
     }
     .subtitle {
       color: var(--muted);
-      font-size: 12px;
-      margin-top: 3px;
-      font-weight: 700;
+      font-size: 11px;
+      line-height: 1.25;
+      margin-top: 7px;
+      font-weight: 850;
+      letter-spacing: 0;
+      text-transform: uppercase;
     }
     .topbar-meta {
       display: flex;
@@ -102,6 +107,7 @@
       color: var(--muted);
       font-size: 11px;
       font-weight: 900;
+      letter-spacing: 0;
       text-transform: uppercase;
     }
     .state-pill.solid {
@@ -818,10 +824,10 @@
       <div class="brand">
         <div class="brand-mark"><svg class="icon icon-lg"><use href="#icon-calendar"></use></svg></div>
         <div>
-          <h1>周期管理面板</h1>
-          <div class="subtitle">配置、提示词与会话状态</div>
+          <h1>Period</h1>
+          <div class="subtitle">Cycle Intelligence · Prompt Atelier · Session Control</div>
           <div class="topbar-meta">
-            <span class="issue-pill">Issue 02 / Cycle Atelier</span>
+            <span class="issue-pill">Issue 03 / Period Studio</span>
             <span class="state-pill solid" id="topbar-sync-state">已同步</span>
             <span class="state-pill" id="topbar-session-count">0 Sessions</span>
           </div>

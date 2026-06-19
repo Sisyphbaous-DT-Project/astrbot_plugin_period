@@ -9,4 +9,4 @@ repo: "https://github.com/Sisyphbaous-DT-Project/astrbot_plugin_period"
 astrbot_version: ">=4.24"
 pages:
   - name: dashboard
-    title: 周期管理面板
+    title: Period
