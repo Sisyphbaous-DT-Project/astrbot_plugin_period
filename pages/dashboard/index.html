@@ -910,6 +910,25 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="modal-confirm">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+      <div class="modal-title modal-title-warning">
+        <svg class="icon"><use href="#icon-alert"></use></svg>
+        <span id="confirm-title">确认操作</span>
+      </div>
+      <div class="modal-body">
+        <div class="risk-copy" id="confirm-message">该操作不可恢复。</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" type="button" id="btn-confirm-cancel">取消</button>
+        <button class="btn btn-danger" type="button" id="btn-confirm-ok">
+          <svg class="icon"><use href="#icon-trash"></use></svg>
+          <span>确认</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="modal-mood-warning">
     <div class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="mood-warning-title">
       <div class="modal-title modal-title-warning">
@@ -994,6 +1013,8 @@
     let moodWarningResolver = null;
     let moodWarningMode = 'info';
     let moodWarningLastFocus = null;
+    let confirmResolver = null;
+    let confirmLastFocus = null;
 
     const $ = (id) => document.getElementById(id);
 
@@ -1019,7 +1040,10 @@
 
     function bindStaticEvents() {
       $('btn-refresh').addEventListener('click', () => {
-        if (dirty && !confirm('当前设置还没有保存，确定要刷新吗？')) return;
+        if (dirty) {
+          showMessage('当前设置还没有保存，请先保存后再刷新。', 'error');
+          return;
+        }
         loadData();
       });
       $('btn-save').addEventListener('click', saveConfig);
@@ -1028,11 +1052,16 @@
       $('btn-modal-confirm').addEventListener('click', confirmAnchor);
       $('btn-mood-warning-cancel').addEventListener('click', () => resolveMoodWarning(false));
       $('btn-mood-warning-confirm').addEventListener('click', () => resolveMoodWarning(true));
+      $('btn-confirm-cancel').addEventListener('click', () => resolveConfirm(false));
+      $('btn-confirm-ok').addEventListener('click', () => resolveConfirm(true));
       $('modal-anchor').addEventListener('click', (event) => {
         if (event.target === $('modal-anchor')) closeModal();
       });
       $('modal-mood-warning').addEventListener('click', (event) => {
         if (event.target === $('modal-mood-warning')) resolveMoodWarning(false);
+      });
+      $('modal-confirm').addEventListener('click', (event) => {
+        if (event.target === $('modal-confirm')) resolveConfirm(false);
       });
       document.addEventListener('click', handleClick);
       document.addEventListener('input', handleInput);
@@ -1543,6 +1572,13 @@
           return;
         }
       }
+      if ($('modal-confirm').classList.contains('show')) {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          resolveConfirm(false);
+          return;
+        }
+      }
       if (event.key !== 'Enter') return;
       const input = event.target.closest('.tag-input');
       if (!input) return;
@@ -1707,7 +1743,7 @@
 
     async function toggleSession(umo) {
       try {
-        await AstrBotPluginPage.apiPost(`sessions/${encodeURIComponent(umo)}/toggle`);
+        await AstrBotPluginPage.apiPost(`sessions/${umo}/toggle`);
         await loadData();
       } catch (e) {
         showMessage('切换失败: ' + e.message, 'error');
@@ -1716,7 +1752,7 @@
 
     async function advanceSession(umo, days) {
       try {
-        await AstrBotPluginPage.apiPost(`sessions/${encodeURIComponent(umo)}/advance`, { days });
+        await AstrBotPluginPage.apiPost(`sessions/${umo}/advance`, { days });
         await loadData();
       } catch (e) {
         showMessage('快进失败: ' + e.message, 'error');
@@ -1743,7 +1779,7 @@
         return;
       }
       try {
-        await AstrBotPluginPage.apiPost(`sessions/${encodeURIComponent(pendingUmo)}/anchor`, { date });
+        await AstrBotPluginPage.apiPost(`sessions/${pendingUmo}/anchor`, { date });
         closeModal();
         await loadData();
       } catch (e) {
@@ -1752,9 +1788,14 @@
     }
 
     async function deleteSession(umo) {
-      if (!confirm('确定要删除该会话的周期数据吗？此操作不可恢复。')) return;
+      const accepted = await showConfirm({
+        title: '删除会话周期数据',
+        message: '确定要删除该会话的周期数据吗？此操作不可恢复。',
+        confirmText: '删除',
+      });
+      if (!accepted) return;
       try {
-        await AstrBotPluginPage.apiPost(`sessions/${encodeURIComponent(umo)}/delete`);
+        await AstrBotPluginPage.apiPost(`sessions/${umo}/delete`);
         await loadData();
       } catch (e) {
         showMessage('删除失败: ' + e.message, 'error');
@@ -1779,6 +1820,32 @@
       }
       el.className = `message-bar show message-${type || 'info'}`;
       el.textContent = message;
+    }
+
+    function showConfirm(options = {}) {
+      if (confirmResolver) return Promise.resolve(false);
+      $('confirm-title').textContent = options.title || '确认操作';
+      $('confirm-message').textContent = options.message || '该操作不可恢复。';
+      $('btn-confirm-ok').querySelector('span').textContent = options.confirmText || '确认';
+      confirmLastFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      $('modal-confirm').classList.add('show');
+      setTimeout(() => $('btn-confirm-ok').focus(), 0);
+      return new Promise(resolve => {
+        confirmResolver = resolve;
+      });
+    }
+
+    function resolveConfirm(accepted) {
+      const modal = $('modal-confirm');
+      if (!modal.classList.contains('show')) return;
+      modal.classList.remove('show');
+      const resolver = confirmResolver;
+      confirmResolver = null;
+      if (confirmLastFocus && typeof confirmLastFocus.focus === 'function') {
+        confirmLastFocus.focus({ preventScroll: true });
+      }
+      confirmLastFocus = null;
+      if (resolver) resolver(accepted);
     }
 
     function markDirty() {

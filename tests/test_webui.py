@@ -712,6 +712,50 @@ async def test_webapi_toggle_session(webui_plugin):
 
 
 @pytest.mark.asyncio
+async def test_webapi_toggle_decodes_legacy_encoded_umo(webui_plugin):
+    umo = "test:platform:user1"
+    await webui_plugin.store.set(umo, {
+        "anchor_date": "2025-05-20",
+        "cycle_length": 28,
+        "period_length": 5,
+        "ovulation_day": 14,
+        "ovulation_window": 3,
+        "enabled": True,
+        "advance_days": 0,
+    })
+
+    result, status = _unwrap(await webui_plugin._webapi_toggle_session("test%3Aplatform%3Auser1"))
+
+    assert status == 200
+    assert result["data"]["umo"] == umo
+    assert result["data"]["enabled"] is False
+    assert await webui_plugin.store.get(umo) is not None
+    assert await webui_plugin.store.get("test%3Aplatform%3Auser1") is None
+
+
+@pytest.mark.asyncio
+async def test_webapi_list_sessions_migrates_encoded_alias(webui_plugin):
+    encoded = "test%3Aplatform%3Auser1"
+    await webui_plugin.store.set(encoded, {
+        "anchor_date": "2025-05-20",
+        "cycle_length": 28,
+        "period_length": 5,
+        "ovulation_day": 14,
+        "ovulation_window": 3,
+        "enabled": False,
+        "advance_days": 0,
+    })
+
+    result, status = _unwrap(await webui_plugin._webapi_list_sessions())
+
+    assert status == 200
+    sessions = result["data"]["sessions"]
+    assert [item["umo"] for item in sessions] == ["test:platform:user1"]
+    assert await webui_plugin.store.get(encoded) is None
+    assert await webui_plugin.store.get("test:platform:user1") is not None
+
+
+@pytest.mark.asyncio
 async def test_webapi_toggle_not_found(webui_plugin):
     result, status = _unwrap(await webui_plugin._webapi_toggle_session("nonexistent"))
     assert status == 404
@@ -1047,6 +1091,17 @@ def test_dashboard_warns_before_using_mood_system():
     assert "Promise.resolve(false)" in html
     assert "event.key === 'Escape'" in html
     assert "<symbol id=\"icon-alert\"" in html
+
+
+def test_dashboard_session_actions_avoid_encoded_umo_and_native_confirm():
+    html = _dashboard_html()
+
+    assert "encodeURIComponent(umo)" not in html
+    assert "encodeURIComponent(pendingUmo)" not in html
+    assert "confirm(" not in html
+    assert "modal-confirm" in html
+    assert "function showConfirm" in html
+    assert "resolveConfirm(false)" in html
 
 
 def test_dashboard_normalizes_wrapped_and_unwrapped_bridge_responses():

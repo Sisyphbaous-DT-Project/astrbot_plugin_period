@@ -6,6 +6,7 @@ import json
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote
 
 from quart import jsonify, request
 
@@ -339,6 +340,45 @@ class PeriodPlugin(Star):
             return "global_default"
         return "manual"
 
+    def _normalize_web_umo(self, umo: str) -> str:
+        """还原 WebUI 路径里被编码过的 UMO，避免写出重复会话。"""
+        decoded = unquote(umo)
+        if decoded != umo and ":" in decoded and "/" not in decoded:
+            return decoded
+        return umo
+
+    async def _migrate_encoded_session_alias(self, umo: str) -> str:
+        """将旧版误写入的 percent-encoded UMO 合并回原始 UMO。"""
+        normalized = self._normalize_web_umo(umo)
+        if normalized == umo:
+            return normalized
+
+        alias_cfg = await self.store.get(umo)
+        if alias_cfg:
+            existing = await self.store.get(normalized)
+            next_cfg = self._deep_merge_dicts(existing or {}, alias_cfg)
+            await self.store.set(normalized, next_cfg)
+            await self.store.delete(umo)
+            logger.info(
+                f"[PeriodPlugin] 迁移编码后的 WebUI 会话记录: {umo} -> {normalized}"
+            )
+
+        if umo in self._anchored_sessions:
+            self._anchored_sessions.discard(umo)
+            self._anchored_sessions.add(normalized)
+        if umo in self._inject_counters:
+            self._inject_counters[normalized] = self._inject_counters.pop(umo)
+        if umo in self._warmup_counters:
+            self._warmup_counters[normalized] = self._warmup_counters.pop(umo)
+
+        return normalized
+
+    async def _migrate_encoded_session_aliases(self) -> None:
+        """清理 WebUI 旧版本留下的编码 UMO 会话。"""
+        all_data = await self.store.get_all()
+        for umo in list(all_data.keys()):
+            await self._migrate_encoded_session_alias(umo)
+
     def _serialize_session(self, umo: str, cfg: dict) -> dict | None:
         """Build session dict with live phase calculation."""
         if not cfg or "anchor_date" not in cfg:
@@ -443,6 +483,7 @@ class PeriodPlugin(Star):
 
     async def _webapi_list_sessions(self):
         """GET /astrbot_plugin_period/sessions"""
+        await self._migrate_encoded_session_aliases()
         all_data = await self.store.get_all()
         seen: set[str] = set()
         sessions = []
@@ -538,6 +579,7 @@ class PeriodPlugin(Star):
 
     async def _webapi_toggle_session(self, umo: str):
         """POST /astrbot_plugin_period/sessions/<umo>/toggle"""
+        umo = await self._migrate_encoded_session_alias(umo)
         cfg = await self._get_session_config(umo)
         if not cfg or "anchor_date" not in cfg:
             return jsonify({"status": "error", "message": "会话未配置周期参数"}), 404
@@ -551,6 +593,7 @@ class PeriodPlugin(Star):
 
     async def _webapi_advance_session(self, umo: str):
         """POST /astrbot_plugin_period/sessions/<umo>/advance"""
+        umo = await self._migrate_encoded_session_alias(umo)
         body = await request.get_json() or {}
         days = body.get("days", 1)
         if isinstance(days, bool) or not isinstance(days, int):
@@ -574,6 +617,7 @@ class PeriodPlugin(Star):
 
     async def _webapi_set_anchor(self, umo: str):
         """POST /astrbot_plugin_period/sessions/<umo>/anchor"""
+        umo = await self._migrate_encoded_session_alias(umo)
         body = await request.get_json() or {}
         date_str = body.get("date", "")
         if not date_str:
@@ -612,6 +656,7 @@ class PeriodPlugin(Star):
 
     async def _webapi_delete_session(self, umo: str):
         """POST /astrbot_plugin_period/sessions/<umo>/delete"""
+        umo = await self._migrate_encoded_session_alias(umo)
         if not await self.store.get(umo):
             return jsonify({"status": "error", "message": "会话不存在"}), 404
         await self.store.delete(umo)
