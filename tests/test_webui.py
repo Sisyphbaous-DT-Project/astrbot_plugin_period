@@ -1137,6 +1137,12 @@ def test_dashboard_keeps_editorial_theme_without_hero():
     assert "panel-enter" in html
     assert "--paper: #f5f5f7" in html
     assert "background: var(--paper)" in html
+    assert "--toggle-on: var(--ink)" in html
+    assert "background: var(--toggle-on)" in html
+    assert "@media (prefers-color-scheme: dark)" in html
+    assert "--toggle-off: #4d4d52" in html
+    assert "--toggle-on: #f5f5f7" in html
+    assert "--toggle-knob-on: #111111" in html
     assert "state-pill solid" in html
     assert "hero-canvas" not in html
     assert "initHeroScene" not in html
