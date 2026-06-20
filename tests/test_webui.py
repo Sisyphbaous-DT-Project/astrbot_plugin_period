@@ -1208,6 +1208,14 @@ def test_dashboard_declares_diagnostics_panel_and_api_calls():
     assert "AstrBotPluginPage.apiPost('diagnostics/read', {})" in html
     assert "AstrBotPluginPage.apiPost('diagnostics/clear', {})" in html
     assert "setInterval(loadDiagnosticsSummary, 30000)" in html
+    assert ".topbar {\n      position: relative;\n      z-index: 200;" in html
+    assert ".diagnostics-panel {\n      position: fixed;\n      z-index: 1200;" in html
+    assert "function positionDiagnosticsPanel()" in html
+    assert "window.addEventListener('resize', positionDiagnosticsPanel)" in html
+    assert "window.addEventListener('scroll', positionDiagnosticsPanel, true)" in html
+    assert ".modal-overlay {\n      display: none;\n      position: fixed;" in html
+    assert "padding: 20px;\n      z-index: 1400;\n      backdrop-filter: blur(10px);" in html
+    assert "@keyframes pageEnter {\n      from { opacity: 0; }\n      to { opacity: 1; }" in html
 
 
 def test_dashboard_normalizes_wrapped_and_unwrapped_bridge_responses():

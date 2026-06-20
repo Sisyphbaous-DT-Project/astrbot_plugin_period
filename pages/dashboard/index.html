@@ -46,6 +46,8 @@
     .icon { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
     .icon-lg { width: 20px; height: 20px; }
     .topbar {
+      position: relative;
+      z-index: 200;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -127,7 +129,7 @@
     }
     .diagnostics-widget {
       position: relative;
-      z-index: 50;
+      z-index: 300;
     }
     .diagnostics-button {
       position: relative;
@@ -159,12 +161,13 @@
       background: var(--warning);
     }
     .diagnostics-panel {
-      position: absolute;
-      top: calc(100% + 8px);
-      right: 0;
+      position: fixed;
+      z-index: 1200;
+      top: var(--diagnostics-panel-top, 86px);
+      right: var(--diagnostics-panel-right, 24px);
       display: none;
       width: min(440px, calc(100vw - 48px));
-      max-height: 620px;
+      max-height: min(620px, calc(100vh - var(--diagnostics-panel-top, 86px) - 12px));
       overflow: hidden;
       border: 1px solid var(--line-soft);
       border-radius: 8px;
@@ -172,7 +175,7 @@
       box-shadow: var(--shadow-lift);
       backdrop-filter: blur(18px);
     }
-    .diagnostics-panel.show { display: block; animation: panelEnter 0.18s ease-out both; }
+    .diagnostics-panel.show { display: flex; flex-direction: column; animation: panelEnter 0.18s ease-out both; }
     .diagnostics-panel-header {
       display: flex;
       align-items: flex-start;
@@ -201,7 +204,8 @@
     }
     .diagnostics-close:hover { color: var(--ink); }
     .diagnostics-list {
-      max-height: 420px;
+      flex: 1 1 auto;
+      min-height: 0;
       overflow-y: auto;
       padding: 10px;
       background: #fff;
@@ -868,7 +872,7 @@
       align-items: center;
       justify-content: center;
       padding: 20px;
-      z-index: 100;
+      z-index: 1400;
       backdrop-filter: blur(10px);
     }
     .modal-overlay.show { display: flex; }
@@ -932,8 +936,8 @@
     .risk-list li + li { margin-top: 4px; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes pageEnter {
-      from { opacity: 0; transform: translateY(8px); }
-      to { opacity: 1; transform: translateY(0); }
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
     @keyframes panelEnter {
       from { opacity: 0; transform: translateY(8px); }
@@ -952,8 +956,6 @@
       .toolbar .btn { flex: 1 1 auto; }
       .diagnostics-widget { flex: 0 0 auto; }
       .diagnostics-panel {
-        right: auto;
-        left: 0;
         width: calc(100vw - 24px);
       }
       .summary-grid { grid-template-columns: 1fr; }
@@ -1295,6 +1297,8 @@
       document.addEventListener('input', handleInput);
       document.addEventListener('change', handleChange);
       document.addEventListener('keydown', handleKeydown);
+      window.addEventListener('resize', positionDiagnosticsPanel);
+      window.addEventListener('scroll', positionDiagnosticsPanel, true);
     }
 
     async function loadData() {
@@ -2127,13 +2131,31 @@
         return;
       }
       diagnosticsPanelOpen = true;
+      positionDiagnosticsPanel();
       $('diagnostics-panel').classList.add('show');
       await loadDiagnosticsEvents();
+      positionDiagnosticsPanel();
     }
 
     function closeDiagnosticsPanel() {
       diagnosticsPanelOpen = false;
       $('diagnostics-panel').classList.remove('show');
+    }
+
+    function positionDiagnosticsPanel() {
+      if (!diagnosticsPanelOpen) return;
+      const button = $('btn-diagnostics');
+      const panel = $('diagnostics-panel');
+      if (!button || !panel) return;
+      const rect = button.getBoundingClientRect();
+      const gap = 8;
+      const edge = 12;
+      const width = Math.min(440, window.innerWidth - edge * 2);
+      const top = Math.min(rect.bottom + gap, window.innerHeight - 120);
+      const right = Math.max(edge, window.innerWidth - rect.right);
+      const maxRight = Math.max(edge, window.innerWidth - edge - width);
+      panel.style.setProperty('--diagnostics-panel-top', `${Math.max(edge, top)}px`);
+      panel.style.setProperty('--diagnostics-panel-right', `${Math.min(right, maxRight)}px`);
     }
 
     async function markDiagnosticsRead() {
