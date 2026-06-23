@@ -115,6 +115,54 @@ async def test_webapi_list_sessions_skips_invalid(webui_plugin):
 
 
 @pytest.mark.asyncio
+async def test_webapi_list_sessions_hides_persisted_webchat_entries(webui_plugin):
+    """WebUI 会话列表应隐藏已保存的 webchat 条目，但不删除原始数据。"""
+    normal_umo = "test:platform:user1"
+    webchat_umo = "webchat!CHNO!c3131185-1490-4dba-81cd-65d006681c2b"
+    session_cfg = {
+        "anchor_date": "2025-05-20",
+        "cycle_length": 28,
+        "period_length": 5,
+        "ovulation_day": 14,
+        "ovulation_window": 3,
+        "enabled": True,
+        "advance_days": 0,
+    }
+    await webui_plugin.store.set(normal_umo, dict(session_cfg))
+    await webui_plugin.store.set(webchat_umo, dict(session_cfg))
+
+    result, status = _unwrap(await webui_plugin._webapi_list_sessions())
+
+    assert status == 200
+    assert result["data"]["count"] == 1
+    assert [item["umo"] for item in result["data"]["sessions"]] == [normal_umo]
+    assert await webui_plugin.store.get(webchat_umo) == session_cfg
+
+
+@pytest.mark.asyncio
+async def test_webapi_list_sessions_hides_webchat_anchored_sessions(webui_plugin):
+    """运行期记录的全局默认 webchat 会话也不应展示到 WebUI。"""
+    normal_umo = "test:platform:default-user"
+    webchat_umo = "webchat!CHNO!c3131185-1490-4dba-81cd-65d006681c2b"
+    webui_plugin.config["default_anchor_date"] = "2026-05-25"
+    webui_plugin.config["default_enabled"] = True
+    webui_plugin._anchored_sessions.update({normal_umo, webchat_umo})
+
+    result, status = _unwrap(await webui_plugin._webapi_list_sessions())
+
+    assert status == 200
+    assert result["data"]["count"] == 1
+    assert [item["umo"] for item in result["data"]["sessions"]] == [normal_umo]
+
+
+def test_should_hide_session_in_dashboard_matches_only_webchat_prefix(webui_plugin):
+    assert webui_plugin._should_hide_session_in_dashboard("webchat") is True
+    assert webui_plugin._should_hide_session_in_dashboard("webchat!CHNO!id") is True
+    assert webui_plugin._should_hide_session_in_dashboard("webchat:CHNO:id") is True
+    assert webui_plugin._should_hide_session_in_dashboard("mywebchat:platform:user") is False
+
+
+@pytest.mark.asyncio
 async def test_global_default_session_uses_live_period_length(webui_plugin):
     """全局默认会话应跟随后续 default_period_length 变化。"""
     umo = "test:platform:default-user"

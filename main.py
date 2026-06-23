@@ -481,6 +481,11 @@ class PeriodPlugin(Star):
             return "global_default"
         return "manual"
 
+    def _should_hide_session_in_dashboard(self, umo: str) -> bool:
+        """判断某个会话是否只应从 WebUI 会话列表隐藏。"""
+        umo = str(umo)
+        return umo == "webchat" or umo.startswith(("webchat!", "webchat:"))
+
     def _normalize_web_umo(self, umo: str) -> str:
         """还原 WebUI 路径里被编码过的 UMO，避免写出重复会话。"""
         decoded = unquote(umo)
@@ -650,6 +655,8 @@ class PeriodPlugin(Star):
             sessions = []
             # 1) Explicitly configured sessions (from persistent store)
             for umo, cfg in all_data.items():
+                if self._should_hide_session_in_dashboard(umo):
+                    continue
                 if cfg.get("source") == "global_default" or (
                     self._is_legacy_global_default_config(cfg)
                 ):
@@ -660,6 +667,8 @@ class PeriodPlugin(Star):
                     seen.add(umo)
             # 2) Sessions that use global defaults but have not been persisted yet
             for umo in self._anchored_sessions:
+                if self._should_hide_session_in_dashboard(umo):
+                    continue
                 if umo in seen:
                     continue
                 cfg = await self._get_session_config(umo)
