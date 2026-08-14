@@ -70,13 +70,16 @@ class TestInjectLocation:
         assert "[身体感知系统]" in mock_req.system_prompt
 
     @pytest.mark.asyncio
-    async def test_user_message_before(self, plugin, mock_event, mock_req, valid_cfg):
-        """user_message_before prepends dynamic state to user message."""
+    async def test_user_message_before_downgraded(self, plugin, mock_event, mock_req, valid_cfg):
+        """user_message_before 已废弃（会写入聊天历史），降级为临时 extra 注入。"""
         plugin.config["inject_location"] = "user_message_before"
         plugin._get_session_config = AsyncMock(return_value=valid_cfg)
         await plugin.on_llm_request(mock_event, mock_req)
-        assert mock_req.prompt.startswith("[当前生理状态]")
-        assert "用户原始消息" in mock_req.prompt
+        # 绝不改写 req.prompt（否则动态状态会被 AstrBot 写入普通聊天历史）
+        assert mock_req.prompt == "用户原始消息"
+        assert len(mock_req.extra_user_content_parts) == 1
+        assert "[当前生理状态]" in mock_req.extra_user_content_parts[0].text
+        assert mock_req.extra_user_content_parts[0]._no_save is True
 
     @pytest.mark.asyncio
     async def test_system_prompt_append(self, plugin, mock_event, mock_req, valid_cfg):
@@ -101,28 +104,28 @@ class TestInjectLocation:
 
     @pytest.mark.asyncio
     async def test_fake_tool_call(self, plugin, mock_event, mock_req, valid_cfg):
-        """fake_tool_call inserts assistant+tool messages into contexts."""
+        """fake_tool_call 已废弃：自动降级为 extra_user_content_parts，不污染 contexts。"""
         plugin.config["inject_location"] = "fake_tool_call"
         plugin._get_session_config = AsyncMock(return_value=valid_cfg)
         await plugin.on_llm_request(mock_event, mock_req)
-        assert len(mock_req.contexts) == 2
-        assert mock_req.contexts[0]["role"] == "assistant"
-        assert "tool_calls" in mock_req.contexts[0]
-        assert mock_req.contexts[1]["role"] == "tool"
-        assert "[当前生理状态]" in mock_req.contexts[1]["content"]
+        assert len(mock_req.contexts) == 0  # 不再伪造工具调用
+        assert len(mock_req.extra_user_content_parts) == 1
+        assert "[当前生理状态]" in mock_req.extra_user_content_parts[0].text
+        # 临时注入，不落历史
+        assert mock_req.extra_user_content_parts[0]._no_save is True
 
     @pytest.mark.asyncio
     async def test_fake_tool_call_gemini_fallback(self, plugin, mock_event, mock_req, valid_cfg):
-        """fake_tool_call auto-falls back to user_message_before for Gemini."""
+        """fake_tool_call 对任何 Provider 统一降级为 extra_user_content_parts。"""
         gemini_provider = MagicMock()
         gemini_provider.provider_config = {"type": "googlegenai_chat_completion"}
         plugin.context.get_using_provider.return_value = gemini_provider
         plugin.config["inject_location"] = "fake_tool_call"
         plugin._get_session_config = AsyncMock(return_value=valid_cfg)
         await plugin.on_llm_request(mock_event, mock_req)
-        # Should fall back to user_message_before
-        assert mock_req.prompt.startswith("[当前生理状态]")
-        assert len(mock_req.contexts) == 0  # No fake tool calls inserted
+        assert len(mock_req.contexts) == 0
+        assert len(mock_req.extra_user_content_parts) == 1
+        assert "[当前生理状态]" in mock_req.extra_user_content_parts[0].text
 
     @pytest.mark.asyncio
     async def test_anchor_injected_every_request(self, plugin, mock_event, mock_req, valid_cfg):

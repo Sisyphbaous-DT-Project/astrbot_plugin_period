@@ -1324,3 +1324,58 @@ async def test_period_set_rejects_non_integer_lengths(webui_plugin, mock_event):
 
     mock_event.plain_result.assert_called_with("周期长度应在21至35天之间")
     assert await webui_plugin.store.get(mock_event.unified_msg_origin) is None
+
+
+@pytest.mark.asyncio
+async def test_alias_migration_canonical_record_wins(webui_plugin):
+    """P1 回归：规范记录优先——别名只补齐缺失字段，不得覆盖新值。
+
+    重试迁移（别名删除失败后的再次合并）同样不得让旧别名覆盖规范记录。
+    """
+    encoded = "test%3Aplatform%3Auser1"
+    canonical = "test:platform:user1"
+    await webui_plugin.store.set(encoded, {
+        "anchor_date": "2025-01-01", "enabled": True, "advance_days": 0,
+        "legacy_only_field": "from_alias",
+    })
+    await webui_plugin.store.set(canonical, {
+        "anchor_date": "2026-02-02", "enabled": False, "advance_days": 9,
+    })
+
+    result = await webui_plugin._migrate_encoded_session_alias(encoded)
+
+    assert result == canonical
+    merged = await webui_plugin.store.get(canonical)
+    assert merged["anchor_date"] == "2026-02-02"  # 规范记录的新锚点保留
+    assert merged["enabled"] is False
+    assert merged["advance_days"] == 9
+    assert merged["legacy_only_field"] == "from_alias"  # 别名只补缺失字段
+    assert await webui_plugin.store.get(encoded) is None
+
+
+@pytest.mark.asyncio
+async def test_alias_migration_write_failure_keeps_original_umo(
+    webui_plugin, monkeypatch,
+):
+    """P1 回归：目标写入失败返回原 UMO，不搬运行态缓存、不造重复记录。"""
+    from pathlib import Path
+
+    encoded = "test%3Aplatform%3Auser1"
+    canonical = "test:platform:user1"
+    await webui_plugin.store.set(encoded, {"anchor_date": "2025-01-01"})
+    webui_plugin._anchored_sessions.add(encoded)
+    webui_plugin._inject_counters[encoded] = 3
+
+    def always_fail(*args, **kwargs):
+        raise OSError("磁盘满")
+
+    monkeypatch.setattr(Path, "write_text", always_fail)
+    result = await webui_plugin._migrate_encoded_session_alias(encoded)
+
+    assert result == encoded  # 目标未持久化，不得返回规范 UMO（假 404）
+    assert await webui_plugin.store.get(canonical) is None
+    # 运行态缓存不搬迁
+    assert canonical not in webui_plugin._anchored_sessions
+    assert encoded in webui_plugin._anchored_sessions
+    assert webui_plugin._inject_counters.get(encoded) == 3
+    assert canonical not in webui_plugin._inject_counters

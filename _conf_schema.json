@@ -112,9 +112,9 @@
   "inject_location": {
     "type": "string",
     "description": "动态状态提示词的注入位置",
-    "options": ["user_message_before", "extra_user_content_parts", "system_prompt_append", "fake_tool_call"],
+    "options": ["extra_user_content_parts", "system_prompt_append"],
     "default": "extra_user_content_parts",
-    "hint": "extra_user_content_parts（默认，推荐）：追加到用户消息末尾，不影响前缀缓存，并通过临时内容标记避免污染对话历史；user_message_before：放在用户消息前面；system_prompt_append：追加到系统提示词（语义最清晰，但动态内容会破坏缓存增加计费）；fake_tool_call：伪造工具调用消息对插入对话历史（LLM 理解为系统查询结果，Gemini 会自动降级为 user_message_before）。"
+    "hint": "extra_user_content_parts（默认，推荐）：追加到用户消息末尾，不影响前缀缓存，并通过临时内容标记避免写入对话历史；system_prompt_append：追加到系统提示词（语义最清晰，但动态内容会破坏缓存增加计费）。旧的 fake_tool_call 与 user_message_before 选项已移除（后者会随用户消息写入对话历史），仍配置它们的老用户会自动安全降级为 extra_user_content_parts。"
   },
   "trigger_keywords": {
     "type": "list",
@@ -178,7 +178,7 @@
   "auto_inject": {
     "type": "bool",
     "description": "生理周期模拟总开关",
-    "hint": "关闭后整个生理周期系统停止工作，不再注入任何提示词。情绪管理系统不受影响。",
+    "hint": "关闭后整个生理周期系统停止工作，不再注入任何提示词。情绪管理系统是周期的附属功能，也会随之停止（已保存的情绪状态保留，重新开启时恢复）。",
     "default": true
   },
   "ooc_shield": {
@@ -197,7 +197,7 @@
   "mood_system_enabled": {
     "type": "bool",
     "description": "情绪管理系统总开关",
-    "hint": "【实验性功能 / 开发中】开启后 AI 会根据用户的态度和生理周期阶段产生情绪波动，可能冷暴力、敷衍、求安慰等。⚠️ 当前版本仍在开发调试中，如果遇到 Bot 不回复消息、回复异常或行为不可控等问题，请立即关闭此开关。⚠️ 每条消息会触发最多 3 次额外的 LLM 调用（筛选→决策→理解），token 消耗显著增加，请谨慎开启。",
+    "hint": "【实验性功能 / 开发中】开启后 AI 会根据用户的态度和生理周期阶段产生情绪波动，可能冷暴力、敷衍、求安慰等。情绪系统是生理周期的附属功能，只在周期总开关开启且会话周期有效时运行。⚠️ 如果遇到 Bot 不回复消息、回复异常或行为不可控等问题，请立即关闭此开关；用户随时可用 /period lift 解除。⚠️ 筛选命中时每条消息会触发 3 次额外的 LLM 调用（筛选→主模型决策→翻译），token 消耗显著增加，请谨慎开启。",
     "default": false
   },
   "mood_scope": {
@@ -210,18 +210,34 @@
   "mood_history_length": {
     "type": "int",
     "description": "情绪决策历史保留条数",
-    "hint": "记录最近多少次情绪工具调用和解除，供日志查看。",
+    "hint": "记录最近多少次情绪事件（动作激活/解除/到期等脱敏摘要），供日志查看。不保存用户消息原文。",
     "default": 20,
     "min": 1,
     "max": 50
   },
 
-  "cold_violence_behavior": {
+  "mood_consult_history_messages": {
+    "type": "int",
+    "description": "情绪决策参考的最近聊天历史条数",
+    "hint": "调用①（筛选）和调用②（主模型决策）参考最近多少条真实对话历史（从 AstrBot 装配的上下文中提取，自动跳过工具调用与临时内容）。0 表示不携带历史。",
+    "default": 30,
+    "min": 0,
+    "max": 100
+  },
+  "mood_state_inject_location": {
     "type": "string",
-    "description": "冷暴力时的表现方式",
-    "options": ["silent", "angry_then_silent", "outburst_then_silent"],
-    "default": "angry_then_silent",
-    "hint": "silent = 完全不说话直接消失；angry_then_silent = 先发一句生气的话然后消失；outburst_then_silent = 先发一句情绪爆发的话然后消失。"
+    "description": "情绪状态快照的注入位置",
+    "options": ["extra_user_content_parts", "system_prompt_append"],
+    "default": "extra_user_content_parts",
+    "hint": "当前心境/最近原因/恢复情况等即时快照注入给正式回复模型的位置。两个选项都不会写入对话历史；旧的 user_message_before 选项已移除并自动降级为 extra_user_content_parts。"
+  },
+  "mood_call_timeout_seconds": {
+    "type": "int",
+    "description": "情绪系统单次 LLM 调用超时（秒）",
+    "hint": "筛选/决策/翻译每次调用的超时时间。超时按失败处理：保持原状态，不激活新动作。",
+    "default": 60,
+    "min": 5,
+    "max": 300
   },
 
   "enable_cold_violence": {
@@ -276,8 +292,8 @@
   },
   "mood_detector_read_system_prompt": {
     "type": "bool",
-    "description": "让情绪检测模型了解 AI 的人设",
-    "hint": "开启后情绪检测会读取主 AI 的系统提示词（比如\"你是一个高冷的御姐\"），这样冷面御姐和可爱萝莉对同一句话的反应会不一样。关闭可省 token。",
+    "description": "让筛选小模型了解 AI 的人设摘要",
+    "hint": "只影响调用①（小模型筛选）：开启后会把主 AI 的系统提示词截断摘要传给筛选模型，帮助判断；调用②（主模型决策）始终使用完整人格，不受此开关影响。关闭可省 token。",
     "default": true
   },
   "mood_detector_system_prompt_max_length": {
@@ -298,13 +314,62 @@
     "type": "text",
     "description": "私聊阶段用户提示词模板（高级）",
     "default": "",
-    "hint": "留空使用内置默认。这是调用②（小模型私聊主模型）的用户提示词模板。支持 {phase} {phase_label} {day} {tools_summary} {history} {user_message} 变量。"
+    "hint": "留空使用内置默认。这是调用②（当前人格主模型自然语言决策）的用户提示词模板。支持 {phase} {phase_label} {day} {mood_snapshot} {diary_text} {actions_description} {user_message} 变量。"
   },
   "mood_detector_interpret_prompt": {
     "type": "text",
     "description": "理解阶段系统提示词（高级）",
     "default": "",
-    "hint": "留空使用内置默认。这是调用③（小模型理解主模型回复）的系统提示词。"
+    "hint": "留空使用内置默认。这是调用③（小模型把主模型的自然语言翻译为 JSON 动作）的系统提示词。"
+  },
+
+  "diary_enabled": {
+    "type": "bool",
+    "description": "情绪日记（长期记忆）",
+    "hint": "【实验性】开启后，专用小模型会在后台把心境变化、动作激活/解除/到期、完全恢复等事件整理成按人隔离的自然语言日记，并默认注入给正式回复和情绪决策。日记异步处理，不阻塞回复；本轮变化从后续请求可见。只有情绪总开关开启且周期有效时才工作。",
+    "default": true,
+    "condition": { "mood_system_enabled": true }
+  },
+  "diary_provider_id": {
+    "type": "string",
+    "description": "日记维护使用的模型（小模型）",
+    "hint": "留空则继承情绪检测模型；再为空则使用事件发生时 AstrBot 当前的对话模型。",
+    "default": "",
+    "_special": "select_provider",
+    "condition": { "mood_system_enabled": true, "diary_enabled": true }
+  },
+  "diary_inject_location": {
+    "type": "string",
+    "description": "日记内容的注入位置",
+    "options": ["extra_user_content_parts", "system_prompt_append"],
+    "default": "extra_user_content_parts",
+    "hint": "两个选项都不会写入对话历史；旧的 user_message_before 选项已移除并自动降级为 extra_user_content_parts。",
+    "condition": { "mood_system_enabled": true, "diary_enabled": true }
+  },
+  "diary_max_chars": {
+    "type": "int",
+    "description": "每本日记的最大字符数",
+    "hint": "超过上限时，日记小模型必须删除最早条目并反复确认直到低于上限；调低上限后存量超限会先由插件确定性裁剪最早条目。",
+    "default": 4000,
+    "min": 500,
+    "max": 20000,
+    "condition": { "mood_system_enabled": true, "diary_enabled": true }
+  },
+  "diary_cross_user_lookup_enabled": {
+    "type": "bool",
+    "description": "允许主模型只读检索其他人的日记",
+    "hint": "【谨慎开启】开启后，正式对话中的 AI 可以通过 period_diary_lookup 工具按 QQ 号（或唯一昵称）查看同一机器人账号下其他用户的情绪日记。检索结果以临时内容提供给模型，不写入对话历史。",
+    "default": false,
+    "condition": { "mood_system_enabled": true, "diary_enabled": true }
+  },
+  "diary_cross_user_max_chars": {
+    "type": "int",
+    "description": "跨人检索返回的最大字符数",
+    "hint": "检索结果超过该长度会被截断。",
+    "default": 800,
+    "min": 100,
+    "max": 4000,
+    "condition": { "mood_system_enabled": true, "diary_enabled": true, "diary_cross_user_lookup_enabled": true }
   },
 
   "prompt_compression_enabled": {

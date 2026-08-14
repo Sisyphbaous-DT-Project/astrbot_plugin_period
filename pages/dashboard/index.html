@@ -1194,7 +1194,8 @@
       { id: 'inject', title: '注入与指令', icon: 'command', desc: '指令权限、注入频率、注入位置与触发词。', fields: ['commands_enabled', 'auto_inject', 'inject_mode', 'inject_location', 'trigger_keywords', 'max_prompt_length', 'warmup_rounds'] },
       { id: 'prompt', title: '提示词显示', icon: 'message', desc: '基础锚点、阶段文案、禁用词与显示项。', fields: ['anchor_prompt', 'phases', 'forbidden_words', 'include_time_modifier', 'include_day_number', 'include_phase_name', 'ooc_shield', 'ooc_replace'] },
       { id: 'scope', title: '生效范围', icon: 'shield', desc: '全局注入、白名单和黑名单范围。', fields: ['global_inject', 'umo_mode', 'umo_list'] },
-      { id: 'mood', title: '情绪系统', icon: 'heart', desc: '情绪工具、模型选择与高级提示词。', fields: ['mood_system_enabled', 'mood_scope', 'mood_history_length', 'cold_violence_behavior', 'enable_cold_violence', 'enable_read_no_reply', 'enable_perfunctory_reply', 'enable_seek_comfort', 'enable_delayed_reply', 'enable_emotional_outburst', 'enable_topic_shift', 'mood_detector_provider_id', 'mood_detector_read_system_prompt', 'mood_detector_system_prompt_max_length', 'mood_detector_screen_prompt', 'mood_detector_consult_prompt', 'mood_detector_interpret_prompt'] },
+      { id: 'mood', title: '情绪系统', icon: 'heart', desc: '情绪动作、三段模型、历史参考与注入位置。', fields: ['mood_system_enabled', 'mood_scope', 'mood_history_length', 'mood_consult_history_messages', 'mood_state_inject_location', 'mood_call_timeout_seconds', 'enable_cold_violence', 'enable_read_no_reply', 'enable_perfunctory_reply', 'enable_seek_comfort', 'enable_delayed_reply', 'enable_emotional_outburst', 'enable_topic_shift', 'mood_detector_provider_id', 'mood_detector_read_system_prompt', 'mood_detector_system_prompt_max_length', 'mood_detector_screen_prompt', 'mood_detector_consult_prompt', 'mood_detector_interpret_prompt'] },
+      { id: 'diary', title: '情绪日记', icon: 'heart', desc: '按人隔离的长期情绪记忆、模型与跨人检索。', fields: ['diary_enabled', 'diary_provider_id', 'diary_inject_location', 'diary_max_chars', 'diary_cross_user_lookup_enabled', 'diary_cross_user_max_chars'] },
       { id: 'compression', title: '提示词压缩', icon: 'compress', desc: '启动压缩、自动触发和压缩比例。', fields: ['prompt_compression_enabled', 'prompt_compression_auto_trigger', 'prompt_compression_ratio'] },
       { id: 'diagnostics', title: '插件诊断', icon: 'activity', desc: '插件自身 warning/error 收集与保存数量。', fields: ['diagnostics_max_entries'] },
     ];
@@ -1202,10 +1203,11 @@
     const OPTION_LABELS = {
       commands_enabled: { all: '全部指令', readonly: '只读', none: '禁用' },
       inject_mode: { every_request: '每次对话', interval_3: '每 3 次', on_trigger: '关键词触发', only_status: '仅状态查询' },
-      inject_location: { extra_user_content_parts: 'Extra 内容后（推荐）', user_message_before: '用户消息前', system_prompt_append: '系统提示词后', fake_tool_call: '伪工具调用' },
+      inject_location: { extra_user_content_parts: 'Extra 内容后（推荐）', system_prompt_append: '系统提示词后' },
       umo_mode: { whitelist: '白名单', blacklist: '黑名单' },
       mood_scope: { per_umo: '按会话独立', global: '全局共享' },
-      cold_violence_behavior: { silent: '直接沉默', angry_then_silent: '先生气再沉默', outburst_then_silent: '先爆发再沉默' },
+      mood_state_inject_location: { extra_user_content_parts: 'Extra 内容后（推荐）', system_prompt_append: '系统提示词后' },
+      diary_inject_location: { extra_user_content_parts: 'Extra 内容后（推荐）', system_prompt_append: '系统提示词后' },
     };
 
     const PHASE_CLASS = {
@@ -1541,10 +1543,10 @@
           <div>
             <div class="risk-title">实验性功能 / 开发中</div>
             <div class="risk-copy" id="mood-risk-status">
-              ${escapeHtml(enabledText)}。情绪系统可能让 Bot 沉默、敷衍、求安慰或爆发；每条消息最多会触发 3 次额外 LLM 调用，token 消耗会明显增加。
+              ${escapeHtml(enabledText)}。情绪系统是生理周期的附属功能，只在周期有效时运行；可能让 Bot 沉默、敷衍、求安慰或爆发。筛选命中的消息会触发 3 次额外 LLM 调用（筛选→主模型决策→翻译），token 消耗明显增加；情绪日记在后台异步维护，另有少量调用。
             </div>
             <ul class="risk-list">
-              <li>测试时如果出现不回复、回复异常或行为不可控，请立即关闭总开关。</li>
+              <li>测试时如果出现不回复、回复异常或行为不可控，请立即关闭总开关；用户随时可用 /period lift 解除沉默。</li>
               <li>建议先用测试会话验证，再扩大到正式会话。</li>
             </ul>
           </div>

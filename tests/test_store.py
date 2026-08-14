@@ -56,8 +56,8 @@ class TestCycleStoreToggle:
     @pytest.mark.asyncio
     async def test_toggle_creates_default(self, store):
         """Toggle on nonexistent record creates one with enabled=True."""
-        state = await store.toggle("new:umo")
-        assert state is True
+        state, persisted = await store.toggle("new:umo")
+        assert state is True and persisted is True
         data = await store.get("new:umo")
         assert data["enabled"] is True
 
@@ -65,10 +65,10 @@ class TestCycleStoreToggle:
     async def test_toggle_flips(self, store):
         """Toggle flips enabled boolean."""
         await store.set("test:umo", {"enabled": True})
-        state = await store.toggle("test:umo")
-        assert state is False
-        state = await store.toggle("test:umo")
-        assert state is True
+        state, persisted = await store.toggle("test:umo")
+        assert state is False and persisted is True
+        state, persisted = await store.toggle("test:umo")
+        assert state is True and persisted is True
 
 
 class TestCycleStorePersistence:
@@ -135,3 +135,100 @@ class TestCycleStoreMultiSession:
 
         assert await store.get("a:umo") is None
         assert (await store.get("b:umo"))["anchor_date"] == "2026-06-01"
+
+
+class TestCycleStoreTransactional:
+    """P1 回归：CycleStore 事务化——落盘失败不污染缓存、如实返回 False。
+
+    旧实现先更新缓存再写盘、delete 直接改缓存本体：双写失败时缓存已删、
+    磁盘还在，Dashboard 重试 404 而重启后记录复活。
+    """
+
+    @staticmethod
+    def _break_disk(monkeypatch):
+        from pathlib import Path
+
+        original_write = Path.write_text
+
+        def always_fail(*args, **kwargs):
+            raise OSError("磁盘满")
+
+        monkeypatch.setattr(Path, "write_text", always_fail)
+        return original_write
+
+    @pytest.mark.asyncio
+    async def test_delete_failure_keeps_cache_and_disk(self, store, monkeypatch):
+        await store.set("umo", {"enabled": True, "anchor_date": "2024-01-15"})
+        self._break_disk(monkeypatch)
+        assert await store.delete("umo") is False
+        # 缓存不被污染：当前进程仍读得到，重试不会 404
+        assert await store.get("umo") is not None
+
+    @pytest.mark.asyncio
+    async def test_delete_failure_retry_succeeds(self, store, monkeypatch):
+        from pathlib import Path
+
+        await store.set("umo", {"enabled": True})
+        original_write = self._break_disk(monkeypatch)
+        assert await store.delete("umo") is False
+        monkeypatch.setattr(Path, "write_text", original_write)  # 恢复磁盘
+        assert await store.delete("umo") is True
+        assert await store.get("umo") is None
+
+    @pytest.mark.asyncio
+    async def test_set_failure_returns_false_and_not_cached(self, store, monkeypatch):
+        self._break_disk(monkeypatch)
+        assert await store.set("umo", {"enabled": True}) is False
+        assert await store.get("umo") is None
+
+    @pytest.mark.asyncio
+    async def test_toggle_failure_reports_not_persisted(self, store, monkeypatch):
+        await store.set("umo", {"enabled": True})
+        self._break_disk(monkeypatch)
+        state, persisted = await store.toggle("umo")
+        assert persisted is False
+        # 缓存与磁盘都保持原值
+        assert (await store.get("umo"))["enabled"] is True
+
+    @pytest.mark.asyncio
+    async def test_get_returns_deep_copy(self, store):
+        """get() 必须返回深拷贝：调用方改返回值不得污染缓存。"""
+        await store.set("umo", {"enabled": True, "anchor_date": "2024-01-15"})
+        cfg = await store.get("umo")
+        cfg["anchor_date"] = "1999-01-01"
+        cfg["enabled"] = False
+        again = await store.get("umo")
+        assert again["anchor_date"] == "2024-01-15"
+        assert again["enabled"] is True
+
+    @pytest.mark.asyncio
+    async def test_delete_nonexistent_is_success(self, store):
+        """记录本就不存在视为成功（无需写盘）。"""
+        assert await store.delete("never:existed") is True
+
+
+class TestCycleStoreDefense:
+    """P2 回归：存储边界深拷贝与损坏单条记录防御。"""
+
+    @pytest.mark.asyncio
+    async def test_set_stores_deep_copy(self, store):
+        """set 成功后调用方继续修改原字典不得污染缓存（缓存镜像磁盘）。"""
+        cfg = {"enabled": True, "anchor_date": "2024-01-15"}
+        await store.set("umo", cfg)
+        cfg["anchor_date"] = "1999-01-01"
+        assert (await store.get("umo"))["anchor_date"] == "2024-01-15"
+
+    @pytest.mark.asyncio
+    async def test_corrupted_record_filtered(self, temp_data_dir):
+        """单条记录值不是对象时忽略，不影响其他记录读取与 toggle。"""
+        temp_data_dir.mkdir(parents=True, exist_ok=True)
+        (temp_data_dir / "cycles.json").write_text(json.dumps({
+            "bad": 7,
+            "good": {"enabled": True, "anchor_date": "2024-01-15"},
+        }), encoding="utf-8")
+        store = CycleStore(temp_data_dir)
+        assert await store.get("bad") is None
+        assert (await store.get("good"))["anchor_date"] == "2024-01-15"
+        # 不得在损坏记录上抛 AttributeError
+        state, persisted = await store.toggle("bad")
+        assert state is True and persisted is True

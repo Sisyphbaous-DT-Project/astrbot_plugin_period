@@ -1,7 +1,7 @@
 name: astrbot_plugin_period
 display_name: 棉絮与铁
 author: C₂₂H₂₅NO₆
-version: "2.2.0"
+version: "3.0.0"
 desc: "棉絮与铁 —— 为女性人格 Bot 提供生理周期模拟 + 情绪管理系统，低侵入式提示词设计"
 short_desc: "生理周期模拟、情绪系统与可视化配置面板"
 logo: "logo.png"
