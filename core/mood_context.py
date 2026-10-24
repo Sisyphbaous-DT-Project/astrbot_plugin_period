@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from astrbot.core.agent.message import TextPart
@@ -58,6 +59,22 @@ def extract_text_content(content: Any) -> str:
     return ""
 
 
+# AstrBot 4.29+ 会把 <system_reminder> 块（用户信息、当前时间、群聊上下文等）作为
+# 普通 text part 写进用户消息并持久化。这些是写给正式回复模型的指令（如"有人 @ 你"），
+# 混进情绪上下文会把筛选/决策模型带进角色扮演，必须剥离，只保留真实对话文本。
+_SYSTEM_REMINDER_RE = re.compile(
+    r"<system[_-]reminder>.*?</system[_-]reminder>", re.DOTALL,
+)
+_DIRECTED_MARKER = "⚠️[DIRECTED AT YOU]"
+
+
+def strip_injected_markup(text: str) -> str:
+    """剥离框架/插件写给回复模型的提示块与定向标记。"""
+    text = _SYSTEM_REMINDER_RE.sub("", text)
+    text = text.replace(_DIRECTED_MARKER, "")
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
 def _entry_role_content(entry: Any) -> tuple[str, Any, bool]:
     """从 dict 或 Message 对象中取 (role, content, no_save)。"""
     if isinstance(entry, dict):
@@ -80,6 +97,7 @@ def parse_history(contexts: Any, limit: int) -> list[dict]:
 
     - 跳过 system/tool/_checkpoint 角色与 _no_save 消息；
     - 多段 content 只保留 text part；
+    - 剥离 <system_reminder> 提示块与定向标记（见 strip_injected_markup）；
     - 空文本消息跳过；
     - 按最终提取出的条数从尾部裁剪到 limit（0 表示不携带历史）；
     - 当前轮用户消息不在 contexts 内，由调用方单独传入，本函数不去重。
@@ -94,7 +112,7 @@ def parse_history(contexts: Any, limit: int) -> list[dict]:
         role, content, no_save = _entry_role_content(entry)
         if no_save or role not in ("user", "assistant"):
             continue
-        text = extract_text_content(content).strip()
+        text = strip_injected_markup(extract_text_content(content))
         if not text:
             continue
         history.append({"role": role, "content": text})

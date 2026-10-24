@@ -4,7 +4,13 @@ import pytest
 
 from core.engine import PhaseInfo
 from core.mood import MoodState, PersistentAction
-from core.mood_detector import MoodDetector
+from core.mood_detector import (
+    DEFAULT_CONSULT_PROMPT,
+    DEFAULT_INTERPRET_PROMPT,
+    DEFAULT_SCREEN_PROMPT,
+    SCREEN_TASK_REMINDER,
+    MoodDetector,
+)
 
 from conftest import ProgrammableProvider
 
@@ -68,11 +74,64 @@ class TestScreen:
         assert "read_no_reply" in prompt
         assert "上一条消息" in prompt
         assert "在吗" in prompt
-        # 人格摘要被截断
-        assert "人格" in prompt
-        assert len(prompt) < 500 * 2
+        # 人格摘要被截断到默认 800 字
+        assert "人格" * 400 + "…" in prompt
+        assert "人格" * 401 not in prompt
         # 不携带 contexts（①不使用真实历史结构）
         assert "contexts" not in call
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("configured", ["", "  \n"])
+    async def test_screen_blank_prompt_falls_back_to_default(
+        self, detector, programmable_provider, phase_info, configured,
+    ):
+        """AstrBot 按 schema 把未填写的提示词落为空串：必须回退内置提示词，
+        否则①会在没有任何任务说明的情况下收到聊天材料而顺势接话。"""
+        detector.config["mood_detector_screen_prompt"] = configured
+        programmable_provider.queue('{"need_intervention": false}')
+        await detector.screen("umo", phase_info, MoodState(), [], "你好")
+        assert programmable_provider.calls[0]["system_prompt"] == DEFAULT_SCREEN_PROMPT
+
+    @pytest.mark.asyncio
+    async def test_screen_custom_prompt_used_verbatim(
+        self, detector, programmable_provider, phase_info,
+    ):
+        detector.config["mood_detector_screen_prompt"] = "自定义筛选规则"
+        programmable_provider.queue('{"need_intervention": false}')
+        await detector.screen("umo", phase_info, MoodState(), [], "你好")
+        assert programmable_provider.calls[0]["system_prompt"] == "自定义筛选规则"
+
+    @pytest.mark.asyncio
+    async def test_screen_prompt_wraps_material_and_ends_with_task(
+        self, detector, programmable_provider, phase_info,
+    ):
+        programmable_provider.queue('{"need_intervention": false}')
+        history = [{"role": "user", "content": "上一条"}]
+        await detector.screen(
+            "umo", phase_info, MoodState(), history, "在吗", persona_summary="人设",
+        )
+        prompt = programmable_provider.calls[0]["prompt"]
+        assert "<对话记录>\n用户：上一条\n</对话记录>" in prompt
+        assert "<最新消息>\n在吗\n</最新消息>" in prompt
+        # 无论是否携带人格摘要，最后一段都是任务重申
+        assert prompt.endswith(SCREEN_TASK_REMINDER)
+
+    @pytest.mark.asyncio
+    async def test_consult_and_interpret_blank_prompt_fall_back(
+        self, detector, programmable_provider, phase_info,
+    ):
+        detector.config["mood_detector_consult_prompt"] = "  \n"
+        detector.config["mood_detector_interpret_prompt"] = "  \n"
+        programmable_provider.queue("我还好", '{"need_intervention": false}')
+        await detector.consult_main_model(
+            "umo", phase_info, MoodState(), [], "你好",
+            system_prompt="人格", diary_text="", model=None,
+        )
+        await detector.interpret("umo", "我还好", MoodState())
+        consult_head = DEFAULT_CONSULT_PROMPT.splitlines()[0]
+        interpret_head = DEFAULT_INTERPRET_PROMPT.splitlines()[0]
+        assert programmable_provider.calls[0]["prompt"].startswith(consult_head)
+        assert programmable_provider.calls[1]["system_prompt"].startswith(interpret_head)
 
     @pytest.mark.asyncio
     async def test_screen_without_persona(self, detector, programmable_provider, phase_info):

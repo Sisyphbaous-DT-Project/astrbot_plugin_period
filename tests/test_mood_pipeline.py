@@ -18,6 +18,7 @@ import pytest
 
 from astrbot_plugin_period.main import PeriodPlugin
 from astrbot_plugin_period.core.mood import MoodState, PersistentAction
+from astrbot_plugin_period.core.mood_detector import DEFAULT_SCREEN_PROMPT
 
 from conftest import MockConversationManager, ProgrammableProvider
 
@@ -142,6 +143,40 @@ class TestCallCounts:
         state = await plugin.mood_store.get(UMO)
         assert state.persistent_actions == []
         assert state.summary == "有点介意"
+
+
+class TestRealConfigAndGroupHistory:
+    """issue #4：真实配置（未填写的提示词为空串）+ AstrBot 4.29 群聊历史形态。"""
+
+    @pytest.mark.asyncio
+    async def test_screen_gets_default_prompt_and_clean_history(self, pipeline, event_factory):
+        plugin, provider, _ = pipeline
+        plugin.config["mood_detector_screen_prompt"] = ""
+        provider.queue(SCREEN_YES, "我还好", _decision_json())
+        contexts = [
+            {"role": "user", "content": [
+                {"type": "text", "text": "你俩啥关系"},
+                {"type": "text", "text": (
+                    "<system_reminder>User ID: 10001, Nickname: 冬青</system_reminder>"
+                )},
+                {"type": "text", "text": (
+                    "<system_reminder>You are in a group chat. Belows are group chat "
+                    "context after your last reply:\n--- BEGIN CONTEXT---\n"
+                    "[ShioYuki/21:30:01]: ⚠️[DIRECTED AT YOU] [At: 诗念] 在吗\n"
+                    "--- END CONTEXT ---\n</system_reminder>"
+                )},
+            ]},
+            {"role": "assistant", "content": "我们才认识没多久"},
+        ]
+        await plugin.on_llm_request(event_factory(umo=UMO), _make_req(contexts=contexts))
+
+        screen, consult = provider.calls[0], provider.calls[1]
+        assert screen["system_prompt"] == DEFAULT_SCREEN_PROMPT
+        assert "你俩啥关系" in screen["prompt"]
+        for text in (screen["prompt"], str(consult["contexts"])):
+            assert "system_reminder" not in text
+            assert "DIRECTED AT YOU" not in text
+        assert consult["contexts"][0] == {"role": "user", "content": "你俩啥关系"}
 
 
 class TestGateDecoupling:

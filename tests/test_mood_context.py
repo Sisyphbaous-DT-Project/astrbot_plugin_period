@@ -13,6 +13,7 @@ from core.mood_context import (
     normalize_inject_location,
     parse_history,
     should_show_body_hint,
+    strip_injected_markup,
 )
 from conftest import make_realistic_history
 
@@ -95,6 +96,38 @@ class TestParseHistory:
         }]
         history = parse_history(contexts, 10)
         assert history[0]["content"] == "可见部分"
+
+    def test_system_reminder_blocks_stripped(self):
+        """AstrBot 4.29 持久化在用户消息里的 <system_reminder> 块不得进入情绪上下文。"""
+        contexts = [
+            {"role": "user", "content": [
+                {"type": "text", "text": "我们才认识多久啊"},
+                {"type": "text", "text": (
+                    "<system_reminder>User ID: 10001, Nickname: 冬青\n"
+                    "Current datetime: 2026-10-16 21:31 (CST)</system_reminder>"
+                )},
+                {"type": "text", "text": (
+                    "<system_reminder>You are in a group chat. Belows are group chat "
+                    "context after your last reply:\n--- BEGIN CONTEXT---\n"
+                    "[ShioYuki/21:30:01]: ⚠️[DIRECTED AT YOU] [At: 诗念] 你俩啥关系\n"
+                    "--- END CONTEXT ---\n</system_reminder>"
+                )},
+            ]},
+            {"role": "assistant", "content": "我们才认识没多久"},
+            # 字符串形态：提示块夹在正文中间
+            {"role": "user", "content": "前半句<system_reminder>提示</system_reminder>后半句"},
+            # 整条只有提示块：剥离后为空，跳过
+            {"role": "user", "content": "<system_reminder>只有提示</system_reminder>"},
+        ]
+        assert parse_history(contexts, 10) == [
+            {"role": "user", "content": "我们才认识多久啊"},
+            {"role": "assistant", "content": "我们才认识没多久"},
+            {"role": "user", "content": "前半句后半句"},
+        ]
+
+    def test_strip_directed_marker_keeps_plain_text(self):
+        assert strip_injected_markup("⚠️[DIRECTED AT YOU] 在吗") == "在吗"
+        assert strip_injected_markup("a < b，<b>不是提示块</b>") == "a < b，<b>不是提示块</b>"
 
     def test_history_to_contexts_round_trip(self):
         history = [{"role": "user", "content": "甲"}, {"role": "assistant", "content": "乙"}]
